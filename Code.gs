@@ -18,6 +18,9 @@ const SHEET_NAME = "LINE Bot 待辦";
 
 // ===== LINE Webhook =====
 function doPost(e) {
+  if (!e || !e.postData || !e.postData.contents) {
+    return ContentService.createTextOutput("OK");
+  }
   const body = JSON.parse(e.postData.contents);
   const events = body.events;
   
