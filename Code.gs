@@ -112,7 +112,7 @@ function addToTodo(userId, text) {
   }
 }
 
-// ===== 測試用 =====
+// ===== GET 請求也回 OK（避免 302） =====
 function doGet() {
-  return ContentService.createTextOutput("LINE Bot Webhook is running!");
+  return ContentService.createTextOutput("OK").setMimeType(ContentService.MimeType.TEXT);
 }

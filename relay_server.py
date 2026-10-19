@@ -106,10 +106,31 @@ def home():
 
 
 if __name__ == "__main__":
+    from pyngrok import ngrok
+    import threading
+    import time
+    
+    # 先啟動 bot（在背景執行）
+    def run_server():
+        app.run(host="0.0.0.0", port=PORT, debug=False)
+    
+    server_thread = threading.Thread(target=run_server, daemon=True)
+    server_thread.start()
+    
+    # 等待 bot 啟動
+    time.sleep(2)
+    
+    # 再建立 ngrok 隧道
+    public_url = ngrok.connect(PORT, "http")
     print(f"\n{'='*50}")
     print(f"轉接站啟動中...")
     print(f"Port: {PORT}")
-    print(f"請用 ngrok 建立隧道：ngrok http {PORT}")
+    print(f"ngrok 公開網址: {public_url}")
     print(f"{'='*50}\n")
     
-    app.run(host="0.0.0.0", port=PORT, debug=True)
+    # 保持主程式運行
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        ngrok.kill()
