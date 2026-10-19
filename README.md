@@ -1,100 +1,54 @@
-# LINE Bot + Gemini API
+# LINE Bot + 本地 Ollama（Apps Script 版）
 
-本專案是一支 LINE 聊天機器人，使用 Google Gemini API 回答問題，並記錄到 Google Sheet。
-
----
-
-## 功能
-
-- 接收 LINE 訊息
-- 用 Google Gemini API 回答問題
-- 自動記錄對話到 Google Sheet
-- 完全雲端运行，不需要本機伺服器
+本專案使用 Google Apps Script 作為 LINE Webhook 接收器，收到「查 ...」的訊息時，轉給跑在電腦上的 Ollama Gemma 2 模型回答；其他訊息記錄到 Google Sheet 待辦。
 
 ---
 
-## 部署方式
+## 架構
 
-### 1. 取得 Gemini API Key
-前往 [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey) 免費申請
-
-### 2. 建立 Google Apps Script
-1. 前往 [https://script.google.com/](https://script.google.com/) 建立新專案
-2. 把 `google_apps_script.gs` 的內容貼上
-3. 修改設定：
-   - `GEMINI_API_KEY` → 你的 API key
-   - `LINE_CHANNEL_ACCESS_TOKEN` → 你的 LINE token
-
-### 3. 部署為 Web App
-1. 點擊「部署」→「新增部署作業」
-2. 選擇「網頁應用程式」
-3. 執行身份：選「我」
-4. 存取權：選「任何人」
-5. 點擊「部署」
-
-### 4. 設定 LINE Webhook
-把部署後的 URL + `/callback` 貼到 LINE Developers 的 Webhook URL
-
-### 5. 測試
-用手機 LINE 傳訊息給 bot
+```
+LINE → Google Apps Script (Webhook) → 轉接站 (你電腦, port 5001) → Ollama Gemma 2
+                                                        ↓
+                                              其他訊息 → Google Sheet (待辦)
+```
 
 ---
 
-## 替代方案：本機端 Ollama
+## 部署步驟
 
-如果你想要使用本機端 Ollama Gemma 模型，請參考 `line_bot_local.py`。
+### 1. 申請 Gemini API Key（不需要了，改用 Ollama）
+> 本專案使用 Ollama，不需要 Gemini API
 
----
-
-## 安裝與使用
-
-### 1. 安裝 Ollama 與 Gemma 4
-
+### 2. 設定 Ollama
 ```bash
-# 安裝 Ollama（Windows 安裝檔）
-# 下載：https://ollama.com/download
-
-# 拉取 Gemma 4 模型
-ollama pull gemma4
-
-# 啟動 Ollama（確認在背景運行）
+ollama pull gemma2
 ollama serve
 ```
 
-### 2. 安裝 LINE Bot 依賴
-
-```bash
-pip install -r requirements.txt
+### 3. 啟動轉接站
+```powershell
+pip install flask requests ollama
+python relay_server.py
 ```
 
-### 3. 設定 LINE Developers
-
-1. 前往 [LINE Developers](https://developers.line.biz/) 建立一個新的 Provider 和 Channel（Messaging API）
-2. 取得 **Channel Access Token** 和 **Channel Secret**
-3. 設定環境變數：
-
-```bash
-# Windows PowerShell
-$env:LINE_CHANNEL_ACCESS_TOKEN = "你的token"
-$env:LINE_CHANNEL_SECRET = "你的secret"
+### 4. 建立 ngrok 隧道
+```powershell
+ngrok http 5001
 ```
+把 ngrok 給的網址記下來，例如 `https://xxxx.ngrok-free.app`
 
-### 4. 設定 Webhook URL
+### 5. 建立 Google Apps Script
+1. 前往 [https://script.google.com/](https://script.google.com/) 建立新專案
+2. 把 `Code.gs` 的內容貼上
+3. 修改設定：
+   - `LINE_CHANNEL_ACCESS_TOKEN` → 你的 LINE token
+   - `RELAY_SERVER_URL` → 你的 ngrok 網址（不含 /ask）
+4. 部署為 Web App（執行身份：我，存取權：任何人）
+5. 把部署後的 URL + `/callback` 貼到 LINE Developers 的 Webhook URL
 
-在 LINE Developers 後台設定 Webhook URL，指向你的公開網址（可使用 ngrok 做本地測試）：
-
-```bash
-# 安裝 ngrok 後執行
-ngrok http 5000
-```
-
-將 `https://你的ngrok網址/callback` 貼到 LINE Developers 的 Webhook URL 欄位。
-
-### 5. 啟動 Bot
-
-```bash
-python line_bot_local.py
-```
+### 6. 測試
+- 傳「查今天新聞」→ bot 用 Ollama 回答，附來源
+- 傳「買牛奶」→ bot 記錄到 Google Sheet 待辦
 
 ---
 
@@ -102,35 +56,17 @@ python line_bot_local.py
 
 | 檔案 | 說明 |
 |------|------|
-| `line_bot_local.py` | Bot 主程式（接收訊息、搜尋、Ollama 回答） |
-| `requirements.txt` | Python 依賴套件 |
+| `Code.gs` | Google Apps Script Webhook（接收 LINE 訊息、判斷轉發） |
+| `relay_server.py` | 轉接站程式（接收請求、搜尋、Ollama 回答） |
 | `README.md` | 本文件 |
-
----
-
-## 運作流程
-
-```
-使用者傳訊息
-    ↓
-LINE Webhook 接收
-    ↓
-Gemma 4 判斷是否需要搜尋？
-    ↓              ↓
-  不需要        需要搜尋
-    ↓              ↓
-直接回答     搜尋網路
-    ↓              ↓
-    ←  Gemma 4 根據搜尋結果回答 + 來源網址
-    ↓
-回覆使用者
-```
+| `requirements.txt` | Python 依賴套件 |
 
 ---
 
 ## 注意事項
 
 - 確認 Ollama 正在運行（`ollama serve`）
-- 確認 Gemma 4 模型已下載（`ollama pull gemma4`）
+- 確認轉接站在運行（`python relay_server.py`）
+- 確認 ngrok 隧道已建立（`ngrok http 5001`）
 - LINE Channel 的 Webhook 已啟用
 - 回覆長度上限 5000 字（LINE 限制）
