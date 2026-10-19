@@ -1,15 +1,48 @@
-# LINE Bot + Ollama Gemma 4
+# LINE Bot + Gemini API
 
-本專案是一支 LINE 聊天機器人，使用本機端 Ollama 的 Gemma 4 模型回答問題。當問題需要最新資訊時，會先搜尋網路再回答，並附上來源網址。
+本專案是一支 LINE 聊天機器人，使用 Google Gemini API 回答問題，並記錄到 Google Sheet。
 
 ---
 
 ## 功能
 
 - 接收 LINE 訊息
-- 自動判斷問題是否需要搜尋最新資訊
-- 需要搜尋時：先搜尋 → 用 Gemma 4 根據搜尋結果回答 → 附上來源
-- 不需要搜尋時：直接用 Gemma 4 回答
+- 用 Google Gemini API 回答問題
+- 自動記錄對話到 Google Sheet
+- 完全雲端运行，不需要本機伺服器
+
+---
+
+## 部署方式
+
+### 1. 取得 Gemini API Key
+前往 [https://aistudio.google.com/apikey](https://aistudio.google.com/apikey) 免費申請
+
+### 2. 建立 Google Apps Script
+1. 前往 [https://script.google.com/](https://script.google.com/) 建立新專案
+2. 把 `google_apps_script.gs` 的內容貼上
+3. 修改設定：
+   - `GEMINI_API_KEY` → 你的 API key
+   - `LINE_CHANNEL_ACCESS_TOKEN` → 你的 LINE token
+
+### 3. 部署為 Web App
+1. 點擊「部署」→「新增部署作業」
+2. 選擇「網頁應用程式」
+3. 執行身份：選「我」
+4. 存取權：選「任何人」
+5. 點擊「部署」
+
+### 4. 設定 LINE Webhook
+把部署後的 URL + `/callback` 貼到 LINE Developers 的 Webhook URL
+
+### 5. 測試
+用手機 LINE 傳訊息給 bot
+
+---
+
+## 替代方案：本機端 Ollama
+
+如果你想要使用本機端 Ollama Gemma 模型，請參考 `line_bot_local.py`。
 
 ---
 
