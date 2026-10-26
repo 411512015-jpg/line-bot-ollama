@@ -12,7 +12,7 @@ from flask import Flask, request, jsonify
 import requests
 
 # ===== 設定 =====
-OLLAMA_MODEL = "gemma2"  # Ollama 上的模型名稱
+OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma2:2b")  # Ollama 上的模型名稱（2b 版本在 CPU 上比較快）
 PORT = 5001  # 轉接站的 port
 
 app = Flask(__name__)
@@ -113,8 +113,8 @@ def ask_ollama(question: str, search_results: list = None) -> str:
 
     if search_results:
         context = "\n\n".join([
-            f"[{i+1}] {r['title']}\n{r['snippet']}\n來源：{r['url']}"
-            for i, r in enumerate(search_results)
+            f"[{i+1}] {r['title']}\n{r['snippet'][:200]}"
+            for i, r in enumerate(search_results[:3])
         ])
         user_content = f"""以下是搜尋結果，請根據這些資訊回答使用者的問題：
 
@@ -130,10 +130,11 @@ def ask_ollama(question: str, search_results: list = None) -> str:
     resp = ollama.chat(
         model=OLLAMA_MODEL,
         messages=[
-            {"role": "system", "content": "你是一個有幫助的助手。請用繁體中文回答問題。"},
+            {"role": "system", "content": "你是一個有幫助的助手。請用繁體中文回答問題，回答盡量精簡。"},
             {"role": "user", "content": user_content}
         ],
-        options={"temperature": 0.7, "num_predict": 500}
+        options={"temperature": 0.5, "num_predict": 220, "num_ctx": 2048},
+        keep_alive="30m"
     )
     return resp["message"]["content"].strip()
 
@@ -142,17 +143,23 @@ def ask_ollama(question: str, search_results: list = None) -> str:
 @app.route("/ask", methods=["POST"])
 def ask():
     """接收 Apps Script 的請求，轉給 Ollama 回答"""
+    import time as _time
+
     data = request.get_json()
     question = data.get("question", "")
-    
+
+    t0 = _time.time()
     logger.info(f"收到問題：{question}")
-    
+
     # 搜尋網路
     search_results = search_web(question)
-    logger.info(f"搜尋到 {len(search_results)} 筆結果")
-    
+    t1 = _time.time()
+    logger.info(f"搜尋到 {len(search_results)} 筆結果（{t1 - t0:.1f} 秒）")
+
     # 用 Ollama 回答
-    answer = ask_ollama(question, search_results)
+    answer = ask_ollama(question, search_results[:3])
+    t2 = _time.time()
+    logger.info(f"Ollama 產生完成（{t2 - t1:.1f} 秒）")
 
     # 有搜尋結果就強制附上來源（不依賴模型自己記得）
     if search_results:
@@ -163,7 +170,8 @@ def ask():
         answer = f"{answer}\n\n來源：\n{sources}"
 
     logger.info(f"回答：{answer[:100]}...")
-    
+    logger.info(f"總耗時 {_time.time() - t0:.1f} 秒")
+
     return jsonify({"answer": answer})
 
 
@@ -186,7 +194,24 @@ if __name__ == "__main__":
     
     # 等待 bot 啟動
     time.sleep(2)
-    
+
+    # 預先載入模型，避免第一次提問等太久
+    def warm_up():
+        try:
+            import ollama
+            logging.info("預先載入 Ollama 模型...")
+            ollama.chat(
+                model=OLLAMA_MODEL,
+                messages=[{"role": "user", "content": "你好"}],
+                options={"num_predict": 1, "num_ctx": 2048},
+                keep_alive="30m",
+            )
+            logging.info("模型已載入完成")
+        except Exception as e:
+            logging.error(f"預先載入模型失敗: {e}")
+
+    threading.Thread(target=warm_up, daemon=True).start()
+
     # 再建立 ngrok 隧道
     public_url = ngrok.connect(PORT, "http")
     print(f"\n{'='*50}")

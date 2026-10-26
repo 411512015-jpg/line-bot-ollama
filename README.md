@@ -30,9 +30,11 @@ Ollama Gemma 2 (自己電腦)  →  需要時上網搜尋並附來源
 
 ```bash
 # Windows 安裝檔：https://ollama.com/download
-ollama pull gemma2
+ollama pull gemma2:2b
 ollama serve
 ```
+
+> 用 `2b` 版本是因為 9b 在你的電腦上（CPU）生成太慢，會讓 LINE 逾時。
 
 ### 2. 安裝 Python 套件
 
@@ -134,6 +136,7 @@ ngrok 公開網址: https://xxxx.ngrok-free.app
 - 把 Webhook 放在 **Google Apps Script**，讓 LINE 不需要直接連到本機。
 - 新增 **轉接站 `relay_server.py`**：接收 Apps Script 的 `/ask` 請求，先上網搜尋，再交給本機 Ollama 回答，並在答案最後附上來源網址。
 - 搜尋來源改用 **Google News RSS + 中文 Wikipedia API**（原本的 DuckDuckGo 會被反機器人頁面擋掉，回傳 0 筆）。
+- 模型改用 **gemma2:2b**：原本的 gemma2:9b 在這台電腦（純 CPU、記憶體有限）生成太慢，會超過 LINE 的回覆時限；2b 明顯快很多，且同樣是 Gemma 2 系列。
 - 訊息分流：**「查 …」走 AI 回答**，其他訊息**寫進 Google Sheet 當待辦**。
 - 轉接站內建 **pyngrok 自動建隧道**，啟動時直接印出可用的公開網址，不用另外開一個 ngrok 視窗。
 - `doPost` 加上空值檢查，避免 LINE 的驗證請求造成錯誤。
@@ -142,7 +145,7 @@ ngrok 公開網址: https://xxxx.ngrok-free.app
 
 ## 卡住時檢查
 
-1. `ollama list` 要看到 `gemma2`
+1. `ollama list` 要看到 `gemma2:2b`
 2. 轉接站視窗要印出 `ngrok 公開網址: ...`
 3. 用瀏覽器開 `https://你的ngrok網址/` 應該看到「轉接站運行中！」
 4. Apps Script 部署的存取權一定要是「任何人」，否則 LINE Verify 會出現 403 / 302
