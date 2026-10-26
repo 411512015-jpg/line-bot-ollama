@@ -14,6 +14,7 @@ import requests
 # ===== 設定 =====
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma2:2b")  # Ollama 上的模型名稱（2b 版本在 CPU 上比較快）
 PORT = 5001  # 轉接站的 port
+LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")  # 轉接站直接回 LINE 用
 
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
@@ -41,10 +42,25 @@ def _search_google_news(query: str, limit: int = 4) -> list:
             title = (item.findtext("title") or "").strip()
             link = (item.findtext("link") or "").strip()
             pub = (item.findtext("pubDate") or "").strip()
-            if title and link:
+            src = item.find("source")
+            src_name = (src.text or "").strip() if src is not None else ""
+            src_url = (src.get("url") or "").strip() if src is not None else ""
+
+            # 標題結尾常是「 - 媒體名」，去掉讓畫面乾淨
+            if src_name and title.endswith(" - " + src_name):
+                title = title[: -(len(src_name) + 3)]
+
+            # 用媒體首頁當來源（Google News 的文章連結又長又會轉址）
+            source_url = src_url or link
+
+            # 社群連結不適合當新聞來源，跳過
+            if any(d in source_url for d in ["facebook.com", "twitter.com", "x.com", "instagram.com", "threads.net"]):
+                continue
+
+            if title and source_url:
                 results.append({
-                    "title": title,
-                    "url": link,
+                    "title": f"{title}（{src_name}）" if src_name else title,
+                    "url": source_url,
                     "snippet": f"發布時間：{pub}" if pub else "",
                 })
             if len(results) >= limit:
@@ -90,12 +106,46 @@ def _search_wikipedia(query: str, limit: int = 3) -> list:
         return []
 
 
+NEWS_HINTS = [
+    "新聞", "最新", "今天", "今日", "近期", "最近", "現在", "目前",
+    "股價", "匯率", "天氣", "颱風", "選舉", "開票", "疫情", "發表",
+]
+
+
+def clean_query(query: str) -> str:
+    """把「查 …」口語問題清成適合搜尋的關鍵字"""
+    import re
+
+    q = (query or "").strip()
+    q = re.sub(r"^查\s*", "", q)
+    for w in ["請問", "幫我查", "幫我", "查一下", "查詢", "告訴我"]:
+        q = q.replace(w, "")
+    q = re.sub(
+        r"(有多高|有多長|有多大|有多重|有多遠|是多少|是什麼|是誰|在哪裡|在哪|"
+        r"怎麼走|怎麼辦|為什麼|如何|多少錢|多少|幾歲|嗎|呢|？|\?)",
+        "",
+        q,
+    )
+    return q.strip()
+
+
 def search_web(query: str) -> list:
     """
-    組合搜尋：Google News RSS + Wikipedia（皆免 API key、不易被封鎖）
+    依問題類型選來源：
+    - 有「新聞/最新/今天…」→ Google News 優先
+    - 其他（知識型）→ 中文 Wikipedia 優先
+    兩者都免 API key，且比 DuckDuckGo 穩定。
     """
-    results = _search_google_news(query, limit=4)
-    results += _search_wikipedia(query, limit=3)
+    cq = clean_query(query) or query
+    is_news = any(h in query for h in NEWS_HINTS)
+
+    results = []
+    if is_news:
+        results += _search_google_news(cq, limit=3)
+        results += _search_wikipedia(cq, limit=2)
+    else:
+        results += _search_wikipedia(cq, limit=3)
+        results += _search_google_news(cq, limit=2)
 
     # 去重
     seen, unique = set(), []
@@ -103,7 +153,7 @@ def search_web(query: str) -> list:
         if r["url"] not in seen:
             seen.add(r["url"])
             unique.append(r)
-    return unique[:5]
+    return unique[:4]
 
 
 # ===== 用 Ollama Gemma 2 回答 =====
@@ -123,7 +173,7 @@ def ask_ollama(question: str, search_results: list = None) -> str:
 
 使用者問題：{question}
 
-請用繁體中文回答，重點清楚、不要編造搜尋結果以外的內容。"""
+請用繁體中文、重點式回答（不要條列太多）。只使用搜尋結果裡有的事實；若找不到答案，就直接說「查不到」。"""
     else:
         user_content = f"請用繁體中文回答以下問題：\n\n{question}"
 
@@ -140,38 +190,81 @@ def ask_ollama(question: str, search_results: list = None) -> str:
 
 
 # ===== 轉接站 API =====
-@app.route("/ask", methods=["POST"])
-def ask():
-    """接收 Apps Script 的請求，轉給 Ollama 回答"""
+def build_answer(question: str) -> str:
+    """搜尋 + Ollama 回答 + 附來源"""
     import time as _time
 
-    data = request.get_json()
-    question = data.get("question", "")
-
     t0 = _time.time()
-    logger.info(f"收到問題：{question}")
-
-    # 搜尋網路
     search_results = search_web(question)
     t1 = _time.time()
     logger.info(f"搜尋到 {len(search_results)} 筆結果（{t1 - t0:.1f} 秒）")
 
-    # 用 Ollama 回答
     answer = ask_ollama(question, search_results[:3])
     t2 = _time.time()
     logger.info(f"Ollama 產生完成（{t2 - t1:.1f} 秒）")
 
-    # 有搜尋結果就強制附上來源（不依賴模型自己記得）
     if search_results:
         sources = "\n".join(
-            f"{i+1}. {r['title'][:40]} - {r['url']}"
+            f"{i+1}. {r['title'][:50]}\n   {r['url']}"
             for i, r in enumerate(search_results[:3])
         )
         answer = f"{answer}\n\n來源：\n{sources}"
 
-    logger.info(f"回答：{answer[:100]}...")
     logger.info(f"總耗時 {_time.time() - t0:.1f} 秒")
+    return answer
 
+
+def reply_line(reply_token: str, text: str):
+    """轉接站直接呼叫 LINE Reply API"""
+    if not LINE_CHANNEL_ACCESS_TOKEN or not reply_token:
+        logger.warning("沒有 LINE token 或 replyToken，無法直接回覆")
+        return
+    if len(text) > 4500:
+        text = text[:4500] + "\n...(已截斷)"
+    try:
+        resp = requests.post(
+            "https://api.line.me/v2/bot/message/reply",
+            headers={
+                "Authorization": f"Bearer {LINE_CHANNEL_ACCESS_TOKEN}",
+                "Content-Type": "application/json",
+            },
+            json={"replyToken": reply_token, "messages": [{"type": "text", "text": text}]},
+            timeout=15,
+        )
+        logger.info(f"已回覆 LINE（HTTP {resp.status_code}）")
+    except Exception as e:
+        logger.error(f"回覆 LINE 失敗: {e}")
+
+
+# ===== 轉接站 API =====
+@app.route("/ask", methods=["POST"])
+def ask():
+    """
+    有 replyToken → 立刻回 202，背景算完再直接回 LINE（避免 LINE webhook 逾時）
+    沒有 replyToken → 同步回答案（方便本機測試）
+    """
+    data = request.get_json(silent=True) or {}
+    question = data.get("question", "")
+    reply_token = data.get("replyToken")
+
+    logger.info(f"收到問題：{question}")
+
+    if reply_token:
+        def worker():
+            try:
+                answer = build_answer(question)
+                logger.info(f"回答：{answer[:120]}...")
+                reply_line(reply_token, answer)
+            except Exception as e:
+                logger.error(f"處理問題失敗: {e}")
+                reply_line(reply_token, f"抱歉，處理時發生錯誤：{e}")
+
+        import threading
+        threading.Thread(target=worker, daemon=True).start()
+        return jsonify({"status": "accepted"}), 202
+
+    answer = build_answer(question)
+    logger.info(f"回答：{answer[:120]}...")
     return jsonify({"answer": answer})
 
 

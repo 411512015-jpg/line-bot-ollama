@@ -64,7 +64,10 @@ pyngrok
 
 ### 步驟 1：啟動轉接站
 
+先設定 LINE token（轉接站算完答案會**直接回 LINE**）：
+
 ```powershell
+$env:LINE_CHANNEL_ACCESS_TOKEN = "你的 LINE token"
 python relay_server.py
 ```
 
@@ -137,6 +140,8 @@ ngrok 公開網址: https://xxxx.ngrok-free.app
 - 新增 **轉接站 `relay_server.py`**：接收 Apps Script 的 `/ask` 請求，先上網搜尋，再交給本機 Ollama 回答，並在答案最後附上來源網址。
 - 搜尋來源改用 **Google News RSS + 中文 Wikipedia API**（原本的 DuckDuckGo 會被反機器人頁面擋掉，回傳 0 筆）。
 - 模型改用 **gemma2:2b**：原本的 gemma2:9b 在這台電腦（純 CPU、記憶體有限）生成太慢，會超過 LINE 的回覆時限；2b 明顯快很多，且同樣是 Gemma 2 系列。
+- 改成**非同步回覆**：Apps Script 收到「查 …」會立刻回 200（避免 LINE webhook 逾時），轉接站算完後**直接呼叫 LINE Reply API** 回覆。
+- 來源網址改用**媒體首頁**（Google News 的文章連結又長又會轉址），畫面比較乾淨。
 - 訊息分流：**「查 …」走 AI 回答**，其他訊息**寫進 Google Sheet 當待辦**。
 - 轉接站內建 **pyngrok 自動建隧道**，啟動時直接印出可用的公開網址，不用另外開一個 ngrok 視窗。
 - `doPost` 加上空值檢查，避免 LINE 的驗證請求造成錯誤。

@@ -30,19 +30,23 @@ function doPost(e) {
       const userId = event.source.userId;
       
       let replyText = "";
+      let handledByRelay = false;
       
       // 判斷是否為「查 ...」
       if (userText.startsWith("查")) {
-        // 轉給本地轉接站（Ollama）
-        replyText = askRelay(userText);
+        // 轉給本地轉接站（Ollama）；轉接站算完會直接回 LINE
+        askRelay(userText, event.replyToken);
+        handledByRelay = true;
       } else {
         // 記錄到 Google Sheet 待辦
         addToTodo(userId, userText);
         replyText = "已記錄到待辦：" + userText;
       }
       
-      // 回覆使用者
-      replyLINE(event.replyToken, replyText);
+      // 回覆使用者（「查 …」由轉接站回，這裡不重複回）
+      if (!handledByRelay) {
+        replyLINE(event.replyToken, replyText);
+      }
     }
   }
   
@@ -50,21 +54,21 @@ function doPost(e) {
 }
 
 // ===== 轉給本地轉接站 =====
-function askRelay(question) {
+function askRelay(question, replyToken) {
   try {
     const url = RELAY_SERVER_URL + "/ask";
     const options = {
       method: "POST",
       contentType: "application/json",
-      payload: JSON.stringify({ question: question }),
+      payload: JSON.stringify({ question: question, replyToken: replyToken }),
       muteHttpExceptions: true
     };
-    
-    const response = UrlFetchApp.fetch(url, options);
-    const result = JSON.parse(response.getContentText());
-    return result.answer;
+
+    // 轉接站會立刻回 202，實際答案由轉接站直接回 LINE
+    UrlFetchApp.fetch(url, options);
   } catch (e) {
-    return "轉接站錯誤：" + e.message;
+    // 轉接站連不上時，至少讓使用者知道
+    replyLINE(replyToken, "轉接站連不上：" + e.message);
   }
 }
 
