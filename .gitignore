@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 .env
 Code_filled.gs
+start_local.bat
