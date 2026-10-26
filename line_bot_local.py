@@ -175,5 +175,32 @@ def home():
 
 
 if __name__ == "__main__":
+    from pyngrok import ngrok
+    import threading
+    import time
+    
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port, debug=True)
+    
+    # 先啟動 bot（在背景執行）
+    def run_bot():
+        app.run(host="0.0.0.0", port=port, debug=False)
+    
+    bot_thread = threading.Thread(target=run_bot, daemon=True)
+    bot_thread.start()
+    
+    # 等待 bot 啟動
+    time.sleep(2)
+    
+    # 再建立 ngrok 隧道
+    public_url = ngrok.connect(port, "http")
+    print(f"\n{'='*50}")
+    print(f"ngrok 公開網址: {public_url}")
+    print(f"Webhook URL: {public_url}/callback")
+    print(f"{'='*50}\n")
+    
+    # 保持主程式運行
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        ngrok.kill()

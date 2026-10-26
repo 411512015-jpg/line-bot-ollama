@@ -1,72 +1,148 @@
 # LINE Bot + 本地 Ollama（Apps Script 版）
 
-本專案使用 Google Apps Script 作為 LINE Webhook 接收器，收到「查 ...」的訊息時，轉給跑在電腦上的 Ollama Gemma 2 模型回答；其他訊息記錄到 Google Sheet 待辦。
+本專案用 Google Apps Script 當 LINE Webhook 接收端：收到「查 …」的訊息時，轉給跑在自己電腦上的 Ollama（Gemma 2）回答並附來源；其他訊息則記錄到 Google Sheet 當待辦。
 
 ---
 
 ## 架構
 
 ```
-LINE → Google Apps Script (Webhook) → 轉接站 (你電腦, port 5001) → Ollama Gemma 2
-                                                        ↓
-                                              其他訊息 → Google Sheet (待辦)
+LINE
+  ↓
+Google Apps Script (Webhook, 雲端)
+  ↓  「查 …」
+轉接站 relay_server.py (自己電腦, port 5001)
+  ↓
+Ollama Gemma 2 (自己電腦)  →  需要時上網搜尋並附來源
+  ↓
+回覆 LINE
+
+其他訊息 → Google Sheet（待辦清單）
 ```
+
+> 因為 Apps Script 在雲端，連不到你電腦的 localhost，所以需要用 ngrok 把「轉接站」變成一個公開網址，讓 Apps Script 呼叫得到。
 
 ---
 
-## 部署步驟
+## 怎麼裝
 
-### 1. 申請 Gemini API Key（不需要了，改用 Ollama）
-> 本專案使用 Ollama，不需要 Gemini API
+### 1. 安裝 Ollama 與模型
 
-### 2. 設定 Ollama
 ```bash
+# Windows 安裝檔：https://ollama.com/download
 ollama pull gemma2
 ollama serve
 ```
 
-### 3. 啟動轉接站
+### 2. 安裝 Python 套件
+
+```bash
+pip install -r requirements.txt
+```
+
+`requirements.txt` 內容：
+
+```
+flask
+requests
+ollama
+pyngrok
+```
+
+### 3. 取得 LINE Channel 資訊
+
+到 [LINE Developers](https://developers.line.biz/) 建立 Messaging API Channel，取得：
+
+- **Channel Access Token**
+- **Channel Secret**
+
+---
+
+## 怎麼跑
+
+### 步驟 1：啟動轉接站
+
 ```powershell
-pip install flask requests ollama
 python relay_server.py
 ```
 
-### 4. 建立 ngrok 隧道
-```powershell
-ngrok http 5001
+它會自動用 pyngrok 建隧道，終端機會印出：
+
 ```
-把 ngrok 給的網址記下來，例如 `https://xxxx.ngrok-free.app`
+==================================================
+轉接站啟動中...
+Port: 5001
+ngrok 公開網址: https://xxxx.ngrok-free.app
+==================================================
+```
 
-### 5. 建立 Google Apps Script
-1. 前往 [https://script.google.com/](https://script.google.com/) 建立新專案
-2. 把 `Code.gs` 的內容貼上
-3. 修改設定：
-   - `LINE_CHANNEL_ACCESS_TOKEN` → 你的 LINE token
-   - `RELAY_SERVER_URL` → 你的 ngrok 網址（不含 /ask）
-4. 部署為 Web App（執行身份：我，存取權：任何人）
-5. 把部署後的 URL + `/callback` 貼到 LINE Developers 的 Webhook URL
+把這個網址記下來。
 
-### 6. 測試
-- 傳「查今天新聞」→ bot 用 Ollama 回答，附來源
-- 傳「買牛奶」→ bot 記錄到 Google Sheet 待辦
+> 如果 pyngrok 說沒認證，先執行：`ngrok config add-authtoken 你的token`
+> （token 在 https://dashboard.ngrok.com/get-started/your-authtoken）
+
+### 步驟 2：建立 Google Apps Script
+
+1. 到 [https://script.google.com/](https://script.google.com/) 建立新專案
+2. 把 `Code.gs` 全部貼上
+3. 修改最上面兩行設定：
+
+   ```javascript
+   const LINE_CHANNEL_ACCESS_TOKEN = "你的 LINE token";
+   const RELAY_SERVER_URL = "https://xxxx.ngrok-free.app";  // 步驟 1 的網址，結尾不要加斜線
+   ```
+
+4. 儲存
+5. **部署 → 新增部署作業 → 網頁應用程式**
+   - 執行身分：**我**
+   - 存取權：**任何人**
+6. 複製部署網址
+
+### 步驟 3：設定 LINE Webhook
+
+到 LINE Developers → 你的 Channel → Messaging API：
+
+- **Webhook URL**：`你的部署網址/callback`
+- 點 **Verify**
+- **Use webhook** 設為 **Enabled**
+
+### 步驟 4：測試
+
+| 你傳的訊息 | Bot 的反應 |
+|---|---|
+| `查 今天有什麼新聞` | 轉給本機 Ollama，上網搜尋後回答並附來源 |
+| `買牛奶` | 回「已記錄到待辦」，並寫進 Google Sheet |
+
+> 「查」後面要有空格或直接接問題都可以（程式用 `startsWith("查")` 判斷）。
 
 ---
 
 ## 檔案說明
 
 | 檔案 | 說明 |
-|------|------|
-| `Code.gs` | Google Apps Script Webhook（接收 LINE 訊息、判斷轉發） |
-| `relay_server.py` | 轉接站程式（接收請求、搜尋、Ollama 回答） |
-| `README.md` | 本文件 |
+|---|---|
+| `Code.gs` | Google Apps Script Webhook：收訊息、判斷是否「查 …」、轉接或寫待辦 |
+| `relay_server.py` | 轉接站：收到問題 → DuckDuckGo 搜尋 → Ollama Gemma 2 回答 → 回傳 |
+| `line_bot_local.py` | 早期版本：不用 Apps Script，直接在電腦上當 Webhook（備份參考） |
+| `cloudflare_worker.js` | 另一種雲端版本（改用 Gemini API，不需本機 Ollama） |
 | `requirements.txt` | Python 依賴套件 |
 
 ---
 
-## 注意事項
+## 我改了什麼
 
-- 確認 Ollama 正在運行（`ollama serve`）
-- 確認轉接站在運行（`python relay_server.py`）
-- 確認 ngrok 隧道已建立（`ngrok http 5001`）
-- LINE Channel 的 Webhook 已啟用
-- 回覆長度上限 5000 字（LINE 限制）
+- 把 Webhook 放在 **Google Apps Script**，讓 LINE 不需要直接連到本機。
+- 新增 **轉接站 `relay_server.py`**：接收 Apps Script 的 `/ask` 請求，先上網搜尋，再交給本機 Ollama 回答，並在答案最後附上來源網址。
+- 訊息分流：**「查 …」走 AI 回答**，其他訊息**寫進 Google Sheet 當待辦**。
+- 轉接站內建 **pyngrok 自動建隧道**，啟動時直接印出可用的公開網址，不用另外開一個 ngrok 視窗。
+- `doPost` 加上空值檢查，避免 LINE 的驗證請求造成錯誤。
+
+---
+
+## 卡住時檢查
+
+1. `ollama list` 要看到 `gemma2`
+2. 轉接站視窗要印出 `ngrok 公開網址: ...`
+3. 用瀏覽器開 `https://你的ngrok網址/` 應該看到「轉接站運行中！」
+4. Apps Script 部署的存取權一定要是「任何人」，否則 LINE Verify 會出現 403 / 302
+5. Webhook URL 結尾一定要有 `/callback`
