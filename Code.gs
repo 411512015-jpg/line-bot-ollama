@@ -6,9 +6,10 @@
  * 
  * 部署方式：
  * 1. 前往 https://script.google.com/ 建立新專案
- * 2. 把這段程式碼貼上
- * 3. 設定部署為 Web App（執行身份：我，存取權：任何人）
- * 4. 部署後的 URL + /callback 貼到 LINE Developers 的 Webhook URL
+ * 2. 把這段程式碼貼上，並填好下面的 token 與轉接站網址
+ * 3. 部署 → 新增部署作業 → 網頁應用程式
+ *    執行身分：我　存取權：任何人
+ * 4. 把「部署網址」（結尾是 /exec，不是 /dev）整串貼到 LINE 的 Webhook URL
  */
 
 // ===== 設定 =====
@@ -61,6 +62,7 @@ function askRelay(question, replyToken) {
       method: "POST",
       contentType: "application/json",
       payload: JSON.stringify({ question: question, replyToken: replyToken }),
+      headers: { "ngrok-skip-browser-warning": "true" },
       muteHttpExceptions: true
     };
 
@@ -96,23 +98,44 @@ function replyLINE(replyToken, text) {
 }
 
 // ===== 記錄到 Google Sheet 待辦 =====
+function getTodoSheet() {
+  const props = PropertiesService.getScriptProperties();
+  let ss = null;
+
+  // 1. 先找之前建立過的試算表
+  const savedId = props.getProperty("SPREADSHEET_ID");
+  if (savedId) {
+    try { ss = SpreadsheetApp.openById(savedId); } catch (e) { ss = null; }
+  }
+
+  // 2. 再試「綁定的試算表」
+  if (!ss) {
+    try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (e) { ss = null; }
+  }
+
+  // 3. 都沒有就自動建一份，並記住 ID
+  if (!ss) {
+    ss = SpreadsheetApp.create("LINE Bot 待辦清單");
+    props.setProperty("SPREADSHEET_ID", ss.getId());
+  }
+
+  let sheet = ss.getSheetByName(SHEET_NAME);
+  if (!sheet) {
+    sheet = ss.insertSheet(SHEET_NAME);
+    sheet.appendRow(["時間", "使用者ID", "待辦事項"]);
+  }
+  return sheet;
+}
+
 function addToTodo(userId, text) {
   try {
-    let ss = SpreadsheetApp.getActiveSpreadsheet();
-    let sheet = ss.getSheetByName(SHEET_NAME);
-    
-    if (!sheet) {
-      sheet = ss.insertSheet(SHEET_NAME);
-      sheet.appendRow(["時間", "使用者ID", "待辦事項"]);
-    }
-    
-    sheet.appendRow([
+    getTodoSheet().appendRow([
       new Date().toLocaleString("zh-TW"),
       userId,
       text
     ]);
   } catch (e) {
-    Console.log("記錄失敗：" + e.message);
+    console.log("記錄失敗：" + e.message);
   }
 }
 

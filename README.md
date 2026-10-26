@@ -101,15 +101,17 @@ ngrok 公開網址: https://xxxx.ngrok-free.app
 5. **部署 → 新增部署作業 → 網頁應用程式**
    - 執行身分：**我**
    - 存取權：**任何人**
-6. 複製部署網址
+6. 複製部署網址（結尾是 **`/exec`**，不是 `/dev`）
 
 ### 步驟 3：設定 LINE Webhook
 
 到 LINE Developers → 你的 Channel → Messaging API：
 
-- **Webhook URL**：`你的部署網址/callback`
+- **Webhook URL**：直接貼上一步的部署網址（`https://script.google.com/macros/s/..../exec`），**不要再加 `/callback`**
 - 點 **Verify**
 - **Use webhook** 設為 **Enabled**
+
+> 如果 Verify 出現 302 或 403：通常是貼到 `/dev` 網址，或部署的「存取權」不是「任何人」。
 
 ### 步驟 4：測試
 
@@ -154,4 +156,5 @@ ngrok 公開網址: https://xxxx.ngrok-free.app
 2. 轉接站視窗要印出 `ngrok 公開網址: ...`
 3. 用瀏覽器開 `https://你的ngrok網址/` 應該看到「轉接站運行中！」
 4. Apps Script 部署的存取權一定要是「任何人」，否則 LINE Verify 會出現 403 / 302
-5. Webhook URL 結尾一定要有 `/callback`
+5. Webhook URL 要用 `/exec` 結尾的部署網址，不能用 `/dev`（`/dev` 一定要登入，會回 302）
+6. 轉接站啟動時要顯示 `LINE token: 已設定`，否則「查 …」不會有回覆

@@ -240,6 +240,8 @@ def reply_line(reply_token: str, text: str):
             timeout=15,
         )
         logger.info(f"已回覆 LINE（HTTP {resp.status_code}）")
+        if resp.status_code != 200:
+            logger.error(f"LINE 回覆失敗內容：{resp.text[:300]}")
     except Exception as e:
         logger.error(f"回覆 LINE 失敗: {e}")
 
@@ -318,8 +320,11 @@ if __name__ == "__main__":
     print(f"\n{'='*50}")
     print(f"轉接站啟動中...")
     print(f"Port: {PORT}")
+    print(f"模型: {OLLAMA_MODEL}")
+    print(f"LINE token: {'已設定（可直接回 LINE）' if LINE_CHANNEL_ACCESS_TOKEN else '未設定（只會回傳答案，不會自己回 LINE）'}")
     print(f"ngrok 公開網址: {public_url}")
-    print(f"{'='*50}\n")
+    print(f"{'='*50}")
+    print("\n等待 LINE 訊息中... （這個視窗請保持開啟）\n")
     
     # 保持主程式運行
     try:
