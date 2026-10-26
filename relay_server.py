@@ -6,10 +6,18 @@
 """
 
 import os
+import sys
 import json
 import logging
 from flask import Flask, request, jsonify
 import requests
+
+# Windows 終端機強制 UTF-8，避免中文變亂碼
+try:
+    sys.stdout.reconfigure(encoding="utf-8")
+    sys.stderr.reconfigure(encoding="utf-8")
+except Exception:
+    pass
 
 # ===== 設定 =====
 OLLAMA_MODEL = os.environ.get("OLLAMA_MODEL", "gemma2:2b")  # Ollama 上的模型名稱（2b 版本在 CPU 上比較快）
