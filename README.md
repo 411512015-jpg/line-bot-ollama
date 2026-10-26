@@ -122,7 +122,7 @@ ngrok 公開網址: https://xxxx.ngrok-free.app
 | 檔案 | 說明 |
 |---|---|
 | `Code.gs` | Google Apps Script Webhook：收訊息、判斷是否「查 …」、轉接或寫待辦 |
-| `relay_server.py` | 轉接站：收到問題 → DuckDuckGo 搜尋 → Ollama Gemma 2 回答 → 回傳 |
+| `relay_server.py` | 轉接站：收到問題 → Google News RSS + Wikipedia 搜尋 → Ollama Gemma 2 回答 → 回傳並附來源 |
 | `line_bot_local.py` | 早期版本：不用 Apps Script，直接在電腦上當 Webhook（備份參考） |
 | `cloudflare_worker.js` | 另一種雲端版本（改用 Gemini API，不需本機 Ollama） |
 | `requirements.txt` | Python 依賴套件 |
@@ -133,6 +133,7 @@ ngrok 公開網址: https://xxxx.ngrok-free.app
 
 - 把 Webhook 放在 **Google Apps Script**，讓 LINE 不需要直接連到本機。
 - 新增 **轉接站 `relay_server.py`**：接收 Apps Script 的 `/ask` 請求，先上網搜尋，再交給本機 Ollama 回答，並在答案最後附上來源網址。
+- 搜尋來源改用 **Google News RSS + 中文 Wikipedia API**（原本的 DuckDuckGo 會被反機器人頁面擋掉，回傳 0 筆）。
 - 訊息分流：**「查 …」走 AI 回答**，其他訊息**寫進 Google Sheet 當待辦**。
 - 轉接站內建 **pyngrok 自動建隧道**，啟動時直接印出可用的公開網址，不用另外開一個 ngrok 視窗。
 - `doPost` 加上空值檢查，避免 LINE 的驗證請求造成錯誤。

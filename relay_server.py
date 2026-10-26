@@ -21,31 +21,89 @@ logger = logging.getLogger(__name__)
 
 
 # ===== 搜尋功能 =====
-def search_web(query: str) -> list:
-    """使用 DuckDuckGo 搜尋（免 API key）"""
+def _search_google_news(query: str, limit: int = 4) -> list:
+    """Google News RSS：適合查「今天/最新」的新聞，穩定免金鑰"""
     try:
-        url = "https://html.duckduckgo.com/html/"
-        headers = {"User-Agent": "Mozilla/5.0"}
-        resp = requests.get(url, params={"q": query}, headers=headers, timeout=10)
+        from urllib.parse import quote
+        import xml.etree.ElementTree as ET
+
+        url = (
+            "https://news.google.com/rss/search?q="
+            + quote(query)
+            + "&hl=zh-TW&gl=TW&ceid=TW:zh-Hant"
+        )
+        resp = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=15)
         resp.raise_for_status()
 
+        root = ET.fromstring(resp.content)
         results = []
-        import re
-        blocks = re.findall(r'class="result__a"[^>]*href="([^"]+)"[^>]*>(.*?)</a>.*?'
-                           r'class="result__snippet"[^>]*>(.*?)</a>', resp.text, re.DOTALL)
-        for url_match, title, snippet in blocks[:5]:
-            title = re.sub(r'<[^>]+>', '', title).strip()
-            snippet = re.sub(r'<[^>]+>', '', snippet).strip()
-            if "uddg=" in url_match:
-                import urllib.parse
-                parsed = urllib.parse.parse_qs(urllib.parse.urlparse(url_match).query)
-                if "uddg" in parsed:
-                    url_match = parsed["uddg"][0]
-            results.append({"title": title, "url": url_match, "snippet": snippet})
+        for item in root.iter("item"):
+            title = (item.findtext("title") or "").strip()
+            link = (item.findtext("link") or "").strip()
+            pub = (item.findtext("pubDate") or "").strip()
+            if title and link:
+                results.append({
+                    "title": title,
+                    "url": link,
+                    "snippet": f"發布時間：{pub}" if pub else "",
+                })
+            if len(results) >= limit:
+                break
         return results
     except Exception as e:
-        logger.error(f"搜尋失敗: {e}")
+        logger.error(f"Google News 搜尋失敗: {e}")
         return []
+
+
+def _search_wikipedia(query: str, limit: int = 3) -> list:
+    """Wikipedia API：適合查知識型問題，穩定免金鑰"""
+    try:
+        import re
+        import urllib.parse
+
+        resp = requests.get(
+            "https://zh.wikipedia.org/w/api.php",
+            params={
+                "action": "query",
+                "list": "search",
+                "srsearch": query,
+                "format": "json",
+                "srlimit": limit,
+            },
+            headers={"User-Agent": "line-bot-relay/1.0"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+        results = []
+        for item in data.get("query", {}).get("search", []):
+            title = item["title"]
+            snippet = re.sub(r"<[^>]+>", "", item.get("snippet", "")).strip()
+            results.append({
+                "title": title,
+                "url": "https://zh.wikipedia.org/wiki/" + urllib.parse.quote(title),
+                "snippet": snippet,
+            })
+        return results
+    except Exception as e:
+        logger.error(f"Wikipedia 搜尋失敗: {e}")
+        return []
+
+
+def search_web(query: str) -> list:
+    """
+    組合搜尋：Google News RSS + Wikipedia（皆免 API key、不易被封鎖）
+    """
+    results = _search_google_news(query, limit=4)
+    results += _search_wikipedia(query, limit=3)
+
+    # 去重
+    seen, unique = set(), []
+    for r in results:
+        if r["url"] not in seen:
+            seen.add(r["url"])
+            unique.append(r)
+    return unique[:5]
 
 
 # ===== 用 Ollama Gemma 2 回答 =====
@@ -58,14 +116,14 @@ def ask_ollama(question: str, search_results: list = None) -> str:
             f"[{i+1}] {r['title']}\n{r['snippet']}\n來源：{r['url']}"
             for i, r in enumerate(search_results)
         ])
-        user_content = f"""以下是搜尋結果，請根據這些資訊回答使用者的問題，並在回答的最後附上來源網址：
+        user_content = f"""以下是搜尋結果，請根據這些資訊回答使用者的問題：
 
 搜尋結果：
 {context}
 
 使用者問題：{question}
 
-請用繁體中文回答，回答的最後一行請附上來源網址（格式：來源：網址）。"""
+請用繁體中文回答，重點清楚、不要編造搜尋結果以外的內容。"""
     else:
         user_content = f"請用繁體中文回答以下問題：\n\n{question}"
 
@@ -95,6 +153,15 @@ def ask():
     
     # 用 Ollama 回答
     answer = ask_ollama(question, search_results)
+
+    # 有搜尋結果就強制附上來源（不依賴模型自己記得）
+    if search_results:
+        sources = "\n".join(
+            f"{i+1}. {r['title'][:40]} - {r['url']}"
+            for i, r in enumerate(search_results[:3])
+        )
+        answer = f"{answer}\n\n來源：\n{sources}"
+
     logger.info(f"回答：{answer[:100]}...")
     
     return jsonify({"answer": answer})
