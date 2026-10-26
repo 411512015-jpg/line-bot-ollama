@@ -8,6 +8,8 @@
 import os
 import sys
 import json
+import time
+import threading
 import logging
 from flask import Flask, request, jsonify
 import requests
@@ -247,6 +249,47 @@ def reply_line(reply_token: str, text: str):
 
 
 # ===== 轉接站 API =====
+@app.route("/callback", methods=["POST"])
+def line_callback():
+    """
+    備援入口：把 LINE Webhook 直接指向 ngrok 網址時使用。
+    （不需要 Apps Script）
+    """
+    data = request.get_json(silent=True) or {}
+    events = data.get("events", [])
+
+    for event in events:
+        if event.get("type") != "message":
+            continue
+        if event.get("message", {}).get("type") != "text":
+            continue
+
+        user_text = event["message"]["text"]
+        reply_token = event.get("replyToken")
+        logger.info(f"收到 LINE 訊息：{user_text}")
+
+        if user_text.startswith("查"):
+            def worker(q=user_text, rt=reply_token):
+                try:
+                    answer = build_answer(q)
+                    logger.info(f"回答：{answer[:120]}...")
+                    reply_line(rt, answer)
+                except Exception as e:
+                    logger.error(f"處理問題失敗: {e}")
+                    reply_line(rt, f"抱歉，處理時發生錯誤：{e}")
+
+            threading.Thread(target=worker, daemon=True).start()
+        else:
+            try:
+                with open("todo.txt", "a", encoding="utf-8") as f:
+                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}\t{user_text}\n")
+            except Exception as e:
+                logger.error(f"寫入待辦失敗: {e}")
+            reply_line(reply_token, "已記錄到待辦：" + user_text)
+
+    return "OK", 200
+
+
 @app.route("/ask", methods=["POST"])
 def ask():
     """
