@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LINE Bot × 本地 AI｜課堂展示</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='demo.css') }}">
+</head>
+<body>
+  <div class="glow glow-a"></div>
+  <div class="glow glow-b"></div>
+
+  <main class="shell">
+    <section class="intro">
+      <div class="eyebrow"><span class="dot"></span> MIDTERM PROJECT · 2026</div>
+      <h1>把 LINE 變成<br><em>會查資料</em>的<br>待辦小幫手</h1>
+      <p class="lede">
+        同一個聊天視窗，兩種工作流：<strong>「查 …」</strong>交給本機 Ollama
+        搜尋＋回答並附來源；其他訊息自動記成待辦。
+      </p>
+
+      <div class="badges">
+        <span>本機推論</span>
+        <span>免 API 費用</span>
+        <span>附上來源</span>
+      </div>
+
+      <div class="flow">
+        <div class="flow-title">一句話的旅程</div>
+        <div class="flow-line">
+          <span>LINE</span><i></i><span>Apps Script</span><i></i><span>Flask 轉接站</span><i></i><span>Gemma 2</span>
+        </div>
+        <small>搜尋資料：Google News RSS + 中文 Wikipedia（免金鑰）</small>
+      </div>
+
+      <div class="note">
+        <span class="pulse"></span>
+        <div>
+          <b>這是課堂展示頁</b>
+          <small>和 LINE 版共用同一個 <code>/ask</code> 流程；不需要 token，也不會把金鑰放進畫面。</small>
+        </div>
+      </div>
+    </section>
+
+    <section class="stage">
+      <div class="phone">
+        <div class="phone-notch"></div>
+        <div class="statusbar">
+          <span>9:41</span>
+          <span class="status-icons">▮▮▮ &nbsp; Wi-Fi &nbsp; 100%</span>
+        </div>
+        <header class="chat-head">
+          <div class="avatar">AI</div>
+          <div class="who">
+            <b>AI 待辦小幫手</b>
+            <small><span class="online"></span> 本機模型在線</small>
+          </div>
+          <div class="menu">⋮</div>
+        </header>
+
+        <div class="chat" id="chat" aria-live="polite">
+          <div class="day">今天</div>
+          <div class="msg bot">
+            <div class="bubble">
+              嗨！有問題就傳 <b>「查 …」</b>，我會上網找資料再回答。<br>
+              要記事情就直接打，例如「買牛奶」。
+            </div>
+            <time>09:41</time>
+          </div>
+        </div>
+
+        <div class="chips" id="chips">
+          <button type="button" data-text="查 玉山有多高">查 玉山有多高</button>
+          <button type="button" data-text="查 今天台灣有什麼新聞">今天有什麼新聞</button>
+          <button type="button" data-text="買牛奶">買牛奶</button>
+        </div>
+
+        <form class="composer" id="chatForm">
+          <input id="message" autocomplete="off" placeholder="輸入「查 …」或待辦事項" maxlength="300">
+          <button type="submit" aria-label="送出">↑</button>
+        </form>
+      </div>
+
+      <aside class="side">
+        <section class="panel">
+          <div class="panel-head">
+            <span class="panel-kicker">BEHIND THE SCENES</span>
+            <span class="model-pill">{{ model }}</span>
+          </div>
+          <h2>這次發生了什麼</h2>
+          <ol class="steps" id="steps">
+            <li data-step="1"><span class="step-icon">1</span><div><b>接收訊息</b><small>判斷「查」或待辦</small></div><i class="state">待機</i></li>
+            <li data-step="2"><span class="step-icon">2</span><div><b>搜尋資料</b><small>新聞 RSS／Wikipedia</small></div><i class="state">待機</i></li>
+            <li data-step="3"><span class="step-icon">3</span><div><b>本地模型生成</b><small>只根據搜尋結果回答</small></div><i class="state">待機</i></li>
+            <li data-step="4"><span class="step-icon">4</span><div><b>回覆並附來源</b><small>超過長度自動截斷</small></div><i class="state">待機</i></li>
+          </ol>
+          <div class="latency"><span>本回合耗時</span><b id="latency">—</b></div>
+        </section>
+
+        <section class="panel todo-panel">
+          <div class="panel-head">
+            <span class="panel-kicker">CAPTURED TASKS</span>
+            <span class="count" id="todoCount">0</span>
+          </div>
+          <h2>待辦清單</h2>
+          <ul class="todos" id="todos">
+            <li class="empty">還沒有待辦，傳一句「買牛奶」試試。</li>
+          </ul>
+          <small class="footnote">展示頁寫入本機 <code>todo.txt</code>；LINE 版寫入 Google Sheet。</small>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <footer>
+    <span>LINE Bot × Local LLM</span>
+    <span>Flask · Ollama Gemma 2 2B · Google Apps Script</span>
+  </footer>
+
+  <script src="{{ url_for('static', filename='demo.js') }}"></script>
+</body>
+</html>

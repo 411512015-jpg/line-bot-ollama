@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="zh-Hant"><head><meta charset="utf-8">
+<title>專題報告</title>
+<style>
+@page { size: A4; margin: 18mm 17mm 18mm; }
+* { box-sizing: border-box; }
+body {
+  margin: 0; color: #1c2a22; font-family: "Microsoft JhengHei", "Noto Sans TC", sans-serif;
+  font-size: 10.2pt; line-height: 1.72; letter-spacing: .01em;
+}
+h1 { font-size: 27pt; line-height: 1.18; letter-spacing: -.04em; margin: 0 0 8mm; color: #122019; }
+h2 {
+  font-size: 16pt; line-height: 1.3; margin: 9mm 0 3mm; color: #075f31;
+  border-bottom: 1.2pt solid #bfe9cb; padding-bottom: 1.5mm; page-break-after: avoid;
+}
+h3 { font-size: 12pt; margin: 6mm 0 2mm; color: #122019; page-break-after: avoid; }
+p { margin: 0 0 3mm; text-align: justify; }
+strong { color: #075f31; }
+ul, ol { margin: 0 0 3.5mm 5.5mm; padding: 0; }
+li { margin: 0 0 1.5mm; }
+blockquote {
+  margin: 4mm 0; padding: 3mm 4mm; background: #f0f8f2;
+  border-left: 3pt solid #06c755; color: #315343; font-size: 9.6pt;
+}
+code {
+  font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.8pt;
+  background: #eef4ef; color: #174d2c; padding: .5mm 1.2mm; border-radius: 2px;
+}
+pre {
+  background: #14251c; color: #dff8e7; padding: 3.5mm 4mm; border-radius: 3mm;
+  font-family: Consolas, "Cascadia Mono", monospace; font-size: 8.5pt; line-height: 1.55;
+  white-space: pre-wrap; page-break-inside: avoid;
+}
+pre code { background: transparent; color: inherit; padding: 0; }
+table {
+  width: 100%; border-collapse: collapse; margin: 4mm 0 5mm; font-size: 9pt;
+  page-break-inside: avoid;
+}
+th {
+  background: #e4f7e9; color: #075f31; text-align: left; font-weight: 800;
+  border: .6pt solid #cde6d5; padding: 1.8mm 2mm;
+}
+td { border: .6pt solid #dbe7de; padding: 1.7mm 2mm; vertical-align: top; }
+tr:nth-child(even) td { background: #fbfdfb; }
+img {
+  display: block; max-width: 100%; height: auto; margin: 5mm auto;
+  border: .6pt solid #dbe7de; border-radius: 2mm; page-break-inside: avoid;
+}
+hr { border: 0; border-top: .6pt solid #dbe7de; margin: 5mm 0; }
+.cover {
+  min-height: 244mm; display: flex; flex-direction: column; justify-content: center;
+  page-break-after: always; padding-left: 8mm; border-left: 5mm solid #06c755;
+}
+.cover h1 { font-size: 30pt; max-width: 150mm; }
+.cover p { font-size: 11pt; color: #66756c; margin: 3mm 0; }
+.cover p strong { font-size: 13pt; color: #075f31; }
+.cover::before {
+  content: "MIDTERM PROJECT / 2026"; font-size: 8pt; font-weight: 800;
+  letter-spacing: .18em; color: #06a948; margin-bottom: 5mm;
+}
+.small { font-size: 9pt; color: #66756c; }
+</style></head>
+<body><section class="cover"><h1>LINE 待辦 × 本地 AI 查詢助手</h1>
+<p><strong>期中專題報告</strong></p>
+<p>姓名：＿＿＿＿＿＿　學號：＿＿＿＿＿＿　日期：2026 / 10 / 31</p>
+</section>
+<h2>摘要</h2>
+<p>這個專案把 LINE 變成一個「可以查資料，也可以記事情」的入口。使用者在聊天室輸入「查 …」時，系統會先搜尋 Google News RSS 與中文 Wikipedia，再把搜尋結果交給跑在自己電腦上的 Ollama Gemma 2 2B 模型整理，最後回覆一段繁體中文答案與可點擊的來源。其他訊息則自動寫入 Google Sheet 待辦清單。</p>
+<p>專案解決兩個日常問題：第一，查資料往往要離開聊天室、開瀏覽器、再回來；第二，待辦常散落在聊天記錄裡。系統採「雲端收發、本機推論」的混合架構：Google Apps Script 負責接收 LINE Webhook，Flask 轉接站負責搜尋與呼叫本機模型。這麼做不需要昂貴的 API 額度，也能把模型推論留在家用電腦。實際測試中，暖機後一次查詢約 5.5～5.9 秒，冷啟動約 16 秒；11 個單元測試全部通過。</p>
+<hr />
+<h2>1. 問題與目標</h2>
+<h3>1.1 我想解決什麼？</h3>
+<p>我每天使用 LINE 的頻率比瀏覽器高。遇到「玉山有多高」、「今天有什麼新聞」這類小問題時，我通常會切到瀏覽器搜尋，看完再回到 LINE；如果是「買牛奶」、「明天交報告」這類事情，則很容易被後面的聊天洗掉。現成的 AI 聊天機器人雖然能回答問題，但多半要把資料送到雲端模型，而且不會順手幫我記待辦。</p>
+<p>因此我想做一個<strong>在原本的聊天視窗裡完成兩件事</strong>的助手：</p>
+<ol>
+<li>問即時或知識型問題時，得到有來源的答案。</li>
+<li>不想查、只想記事情時，一句話就進待辦清單。</li>
+</ol>
+<h3>1.2 給誰用？</h3>
+<ul>
+<li><strong>主要使用者</strong>：手機不離身、常用 LINE 的學生與小型團隊。</li>
+<li><strong>次要使用者</strong>：想嘗試本地 LLM，但還沒有 GPU 或雲端預算的人。</li>
+<li><strong>使用情境</strong>：課堂間查資料、查新聞標題、隨手記待辦、把 LINE 當成輕量第二大腦。</li>
+</ul>
+<h3>1.3 設計目標</h3>
+<table>
+<thead>
+<tr>
+<th>目標</th>
+<th>對應設計</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>不離開 LINE 就能查資料</td>
+<td>Webhook 接收訊息，回答直接回到同一個聊天室</td>
+</tr>
+<tr>
+<td>答案要能查證</td>
+<td>先搜尋，再把結果放進 prompt，最後附上來源</td>
+</tr>
+<tr>
+<td>不要有逐字 API 費用</td>
+<td>使用本機 Ollama，不呼叫收費模型 API</td>
+</tr>
+<tr>
+<td>待辦不要散在聊天記錄</td>
+<td>非「查」訊息自動寫入 Google Sheet</td>
+</tr>
+<tr>
+<td>沒有固定伺服器也要能運作</td>
+<td>用 Google Apps Script 當雲端入口，本機用 ngrok 穿透</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2>2. 功能與使用流程</h2>
+<h3>2.1 兩種模式</h3>
+<table>
+<thead>
+<tr>
+<th>輸入</th>
+<th>系統行為</th>
+<th>輸出</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>查 玉山有多高</code></td>
+<td>清理關鍵字 → 搜尋 Wikipedia → Gemma 2 整理</td>
+<td>答案＋來源連結</td>
+</tr>
+<tr>
+<td><code>查 今天台灣有什麼新聞</code></td>
+<td>判斷為新聞題 → Google News RSS 優先</td>
+<td>近期新聞摘要＋媒體來源</td>
+</tr>
+<tr>
+<td><code>買牛奶</code></td>
+<td>不進入 AI 流程，直接寫入待辦</td>
+<td>「已記錄到待辦：買牛奶」</td>
+</tr>
+</tbody>
+</table>
+<h3>2.2 使用者看到的流程</h3>
+<ol>
+<li>在 LINE 輸入訊息。</li>
+<li>「查 …」由 Apps Script 非同步轉給本機轉接站；其他訊息直接寫入 Google Sheet。</li>
+<li>轉接站搜尋、整理、呼叫 Ollama。</li>
+<li>轉接站直接呼叫 LINE Reply API，把答案與來源送回聊天室。</li>
+</ol>
+<p><img alt="展示頁實際畫面" src="screenshots/demo-answer.png" /></p>
+<hr />
+<h2>3. 系統架構</h2>
+<p><img alt="系統架構圖" src="screenshots/architecture.png" /></p>
+<h3>3.1 元件與責任</h3>
+<table>
+<thead>
+<tr>
+<th>元件</th>
+<th>位置</th>
+<th>責任</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LINE Messaging API</td>
+<td>雲端</td>
+<td>接收使用者訊息、提供 Reply API</td>
+</tr>
+<tr>
+<td>Google Apps Script</td>
+<td>雲端</td>
+<td>Webhook 入口、訊息分流、非同步轉接、寫 Google Sheet</td>
+</tr>
+<tr>
+<td>Flask 轉接站</td>
+<td>自己的電腦</td>
+<td>搜尋、整理 context、呼叫 Ollama、回覆 LINE</td>
+</tr>
+<tr>
+<td>ngrok</td>
+<td>雲端隧道</td>
+<td>把本機 Flask 變成 Apps Script 可連的 HTTPS 網址</td>
+</tr>
+<tr>
+<td>Ollama + Gemma 2 2B</td>
+<td>自己的電腦</td>
+<td>繁體中文生成，CPU 可跑</td>
+</tr>
+<tr>
+<td>Google News RSS／中文 Wikipedia</td>
+<td>雲端</td>
+<td>免金鑰的搜尋來源</td>
+</tr>
+<tr>
+<td>Google Sheet</td>
+<td>雲端</td>
+<td>待辦資料儲存</td>
+</tr>
+</tbody>
+</table>
+<h3>3.2 為什麼是這個架構？</h3>
+<p><strong>（1）為什麼不全部放在本機？</strong></p>
+<p>LINE 的 Webhook 必須是公開的 HTTPS 端點，家用網路通常沒有固定 IP，也不適合直接暴露連接埠。把 Webhook 放在 Apps Script，可以省掉自己維護雲端伺服器的工作；本機只需要處理「搜尋＋推論」這種比較重的工作。</p>
+<p><strong>（2）為什麼不全部放在雲端？</strong></p>
+<p>一開始我做過 Cloudflare Worker + Gemini API 的版本，程式比較短，但需要申請 API key，而且每次回答都有額度與費用考量。改成 Ollama 後，模型推論不用逐字計費，資料也不會送到模型供應商；代價是電腦必須開著。</p>
+<p><strong>（3）為什麼選 Gemma 2 2B？</strong></p>
+<p>這台電腦是純 CPU、記憶體有限。9B 模型生成太慢，會超過 LINE 的回覆時限；2B 版本明顯快很多，回答品質對「短問答＋有搜尋 context」的情境已經夠用。</p>
+<p><strong>（4）為什麼要非同步？</strong></p>
+<p>LINE Webhook 有回應時間限制。Apps Script 收到「查 …」後立刻回 200，Flask 在背景執行緒裡算答案，算完再呼叫 Reply API。這樣使用者不會看到 Webhook 逾時，也不會重複收到訊息。</p>
+<hr />
+<h2>4. 實作細節</h2>
+<h3>4.1 訊息分流</h3>
+<p><code>Code.gs</code> 的 <code>doPost</code> 只做三件事：解析事件、判斷是不是「查」開頭、決定要走 AI 或待辦。程式碼刻意保持簡單，讓錯誤範圍最小。</p>
+<pre><code class="language-javascript">if (userText.startsWith(&quot;查&quot;)) {
+  askRelay(userText, event.replyToken);  // 轉接站稍後直接回 LINE
+  handledByRelay = true;
+} else {
+  addToTodo(userId, userText);
+  replyText = &quot;已記錄到待辦：&quot; + userText;
+}
+</code></pre>
+<h3>4.2 搜尋與關鍵字清理</h3>
+<p>使用者的問法通常很口語，例如「查 玉山有多高」。如果直接把整句丟給搜尋，結果會被「有多高」干擾。<code>clean_query</code> 會移除「查／查詢／請問／幫我」等前綴與「有多高／在哪裡／嗎」等疑問詞，留下「玉山」這種可搜尋的關鍵字。</p>
+<p>系統用 <code>NEWS_HINTS</code> 判斷問題類型：</p>
+<ul>
+<li>含有「新聞、最新、今天、股價、天氣、颱風」等字 → Google News RSS 優先，Wikipedia 補充。</li>
+<li>其他問題 → 中文 Wikipedia 優先，Google News 補充。</li>
+</ul>
+<p>兩個來源都免 API key。Google News 的文章連結又長又會轉址，因此來源網址採用媒體首頁；社群連結（Facebook、X、Instagram 等）會被跳過。</p>
+<h3>4.3 有根據的回答</h3>
+<p>搜尋結果只取前 3 筆放進 prompt，要求模型「只使用搜尋結果裡的事實；若找不到答案，就直接說查不到」。回答長度以 <code>num_predict=220</code> 控制，避免 CPU 生成太久；送回 LINE 前若超過 4,500 字會截斷，避免超過訊息長度上限。</p>
+<p>這不是完美的防幻覺設計，但比「直接問模型」多了兩層保護：<strong>先檢索、再生成</strong>，以及<strong>把來源公開給使用者</strong>。</p>
+<h3>4.4 待辦與 Google Sheet</h3>
+<p>第一次收到非「查」訊息時，Apps Script 會自動建立「LINE Bot 待辦清單」試算表，欄位是時間、使用者 ID、待辦事項，並把試算表 ID 記在指令碼屬性 <code>SPREADSHEET_ID</code>。使用者不需要手動建立表單。</p>
+<h3>4.5 展示頁與祕密管理</h3>
+<p>課堂 demo 最大的風險是「網路、ngrok、LINE token 任一環節出錯」。因此我加了 <code>templates/demo.html</code> 展示頁：</p>
+<ul>
+<li>不需要 LINE token，也不需要 Apps Script。</li>
+<li>和正式版共用 <code>build_answer()</code> 與 <code>/ask</code> 流程。</li>
+<li>右側同步顯示流程狀態、延遲與待辦清單。</li>
+<li>可用 <code>start_demo.bat</code> 一鍵啟動。</li>
+</ul>
+<p>在祕密管理上：</p>
+<ul>
+<li>本機的 LINE token 只放在環境變數，不寫進程式碼。</li>
+<li>Apps Script 的 token 與轉接站網址放在「指令碼屬性」，<code>Code.gs</code> 只讀取，不硬編碼。</li>
+<li><code>.gitignore</code> 排除 <code>.env</code>、<code>Code_filled.gs</code>、<code>start_local.bat</code>、<code>todo.txt</code>。</li>
+<li>交件前執行 <code>python scripts/check_submission.py</code> 掃描 git 追蹤檔案。</li>
+</ul>
+<hr />
+<h2>5. 測試與結果</h2>
+<h3>5.1 單元測試</h3>
+<p>執行：</p>
+<pre><code class="language-powershell">python -m unittest discover -s tests -v
+</code></pre>
+<p>結果：<strong>11 個測試全部通過</strong>。測試不需要 LINE token、ngrok 或 Ollama，使用 mock 取代外部服務。</p>
+<table>
+<thead>
+<tr>
+<th>測試類別</th>
+<th>驗證內容</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>關鍵字清理</td>
+<td>「查／查詢／請問」與疑問詞是否正確移除</td>
+</tr>
+<tr>
+<td>搜尋路由</td>
+<td>新聞題是否優先 Google News、知識題是否優先 Wikipedia</td>
+</tr>
+<tr>
+<td>回答組裝</td>
+<td>是否附上「來源：」、沒有結果時是否能正常回覆</td>
+</tr>
+<tr>
+<td>HTTP API</td>
+<td><code>/ask</code> 同步回 JSON、<code>/demo/message</code> 分流、空訊息回 400</td>
+</tr>
+<tr>
+<td>資訊安全</td>
+<td><code>/health</code> 是否意外回傳 token</td>
+</tr>
+</tbody>
+</table>
+<h3>5.2 展示頁端到端測試</h3>
+<p>實際在 Windows 11、Python 3.13、<code>gemma2:2b</code>、CPU 推論環境操作：</p>
+<table>
+<thead>
+<tr>
+<th>步驟</th>
+<th>操作</th>
+<th>結果</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>1</td>
+<td>開啟 <code>http://127.0.0.1:5001/demo</code></td>
+<td>顯示聊天 UI、流程面板、待辦清單</td>
+</tr>
+<tr>
+<td>2</td>
+<td>點「查 玉山有多高」</td>
+<td>5.9 秒內回覆「玉山海拔約 3,950 公尺」與 3 個 Wikipedia 來源</td>
+</tr>
+<tr>
+<td>3</td>
+<td>點「買牛奶」</td>
+<td>回覆「已記錄到待辦」，右側清單新增一筆</td>
+</tr>
+<tr>
+<td>4</td>
+<td>重新整理頁面</td>
+<td>待辦仍存在（寫入本機 <code>todo.txt</code>）</td>
+</tr>
+</tbody>
+</table>
+<h3>5.3 效能觀測</h3>
+<table>
+<thead>
+<tr>
+<th>情境</th>
+<th style="text-align: right;">搜尋</th>
+<th style="text-align: right;">模型生成</th>
+<th style="text-align: right;">總耗時</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>冷啟動（模型尚未載入）</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">14.0 秒</td>
+<td style="text-align: right;">16.2 秒</td>
+</tr>
+<tr>
+<td>暖機後查詢</td>
+<td style="text-align: right;">2.2 秒</td>
+<td style="text-align: right;">3.3 秒</td>
+<td style="text-align: right;">5.5 秒</td>
+</tr>
+<tr>
+<td>展示頁回歸測試</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">—</td>
+<td style="text-align: right;">5.9 秒</td>
+</tr>
+</tbody>
+</table>
+<p>冷啟動的 16.2 秒主要花在載入模型，不是完整查詢的代表值；暖機後的 5.5～5.9 秒才是一般使用時的感受。這是單次觀測，不是嚴謹 benchmark，網路、CPU 負載與模型是否已載入都會影響結果。這也是為什麼展示頁啟動時會先做一次 <code>warm_up()</code>。</p>
+<h3>5.4 LINE 端到端測試</h3>
+<p>LINE 端需要自己的 Channel token 與 ngrok 網址，因此不在自動化測試裡。開發時的手動檢查清單如下：</p>
+<ul>
+<li><code>ollama list</code> 看得到 <code>gemma2:2b</code>。</li>
+<li>轉接站首頁顯示「轉接站運行中！」。</li>
+<li>LINE 傳「買牛奶」→ Google Sheet 新增一列。</li>
+<li>LINE 傳「查 玉山有多高」→ 回覆有答案與來源。</li>
+<li>關掉轉接站 → LINE 端有錯誤提示，不會永久轉圈。</li>
+<li>重新部署 Apps Script 後，Webhook Verify 成功。</li>
+</ul>
+<blockquote>
+<p>交件前為避免把 token 放進 repo 或截圖，LINE 連線設定不寫進報告；回歸測試以同一個 <code>/ask</code> 流程的展示頁完成。</p>
+</blockquote>
+<h3>5.5 安全檢查</h3>
+<pre><code class="language-text">掃描 git 追蹤檔案……
+OK：沒有發現金鑰、Bearer token、ngrok authtoken 或 Apps Script 部署網址。
+</code></pre>
+<hr />
+<h2>6. 討論與限制</h2>
+<h3>6.1 做得好的地方</h3>
+<ol>
+<li><strong>一個入口解決兩個高頻動作</strong>：查資料與記待辦都在 LINE 裡完成，減少了切換 App 的成本。</li>
+<li><strong>答案可追溯</strong>：即使 2B 模型答得不完美，使用者仍能點開來源自己確認。</li>
+<li><strong>成本低、可複製</strong>：搜尋來源免金鑰，模型在本機跑，沒有逐字費用。</li>
+<li><strong>有展示頁</strong>：把「需要 token、ngrok、手機」的 demo 風險降到最低，課堂上仍能展示同一套流程。</li>
+</ol>
+<h3>6.2 還沒解決的地方</h3>
+<ol>
+<li><strong>電腦必須開著</strong>：休眠、關機或 Ollama 沒啟動，LINE 就查不到。</li>
+<li><strong>ngrok 免費網址會變</strong>：每次重開都要更新 Apps Script 的轉接站網址。</li>
+<li><strong>搜尋深度不足</strong>：目前只讀 RSS 標題與 Wikipedia 摘要，沒有抓文章正文；「今天的新聞」可能拿到不夠即時的結果。</li>
+<li><strong>2B 模型能力有限</strong>：已用 prompt 限制，但仍可能誤解問題或給出過度精簡的答案。</li>
+<li><strong>Webhook 尚未驗證簽章</strong>：公開部署後，知道網址的人都能送假事件。這是目前最需要補的安全洞。</li>
+<li><strong>Google Sheet 會存使用者 ID</strong>：多人使用時要考慮保留期限、存取權限與個資問題。</li>
+</ol>
+<hr />
+<h2>7. 下一步</h2>
+<ol>
+<li><strong>穩定部署</strong>：把 ngrok 換成 Cloudflare Tunnel + 固定網域，讓 Webhook 不用每次重設。</li>
+<li><strong>Webhook 安全</strong>：在 Apps Script 驗證 <code>X-Line-Signature</code>，加上 allowlist 或 shared secret。</li>
+<li><strong>待辦進化</strong>：支援「列表／完成／刪除／截止日」，或直接串 Google Tasks。</li>
+<li><strong>檢索進化</strong>：抓文章正文、切 chunk、做簡單 RAG，而不是只餵 RSS 摘要。</li>
+<li><strong>模型 fallback</strong>：電腦關機時改用雲端小模型，讓服務不中斷。</li>
+<li><strong>回覆體驗</strong>：用 LINE Flex Message 把來源做成按鈕，減少量點與長網址。</li>
+</ol>
+<hr />
+<h2>8. 學習與反思</h2>
+<p>這個專案讓我學到，<strong>AI 應用最難的通常不是「叫模型回答」</strong>，而是周邊的工程：Webhook 逾時、公開網址、搜尋品質、token 管理、錯誤處理，以及「怎麼在課堂上穩定 demo」。一開始我把重點放在模型，後來發現真正讓專案可用的，是非同步回覆、把搜尋結果放進 prompt、以及一個不需要憑證的展示頁。</p>
+<p>AI 助理在這個過程中幫了很多：它可以快速產生第一版、解釋錯誤訊息、提出替代方案；但它也會給出看起來合理、實際上不能跑的程式。最後還是要靠自己讀 log、實際執行、設計測試，才能把「能跑」變成「可以交」。</p>
+<hr />
+<h2>附錄：重現步驟</h2>
+<pre><code class="language-powershell"># 1. 安裝依賴
+pip install -r requirements.txt
+
+# 2. 下載模型
+ollama pull gemma2:2b
+
+# 3. 課堂展示（不需要 LINE token）
+.\start_demo.bat
+
+# 4. 跑測試
+python -m unittest discover -s tests -v
+
+# 5. 交件前安全檢查
+python scripts/check_submission.py
+</code></pre>
+<p>完整安裝與 LINE 設定請見 repo 的 <code>README.md</code>。</p></body></html>

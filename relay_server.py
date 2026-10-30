@@ -11,7 +11,7 @@ import json
 import time
 import threading
 import logging
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, render_template
 import requests
 
 # Windows 終端機強制 UTF-8，避免中文變亂碼
@@ -29,6 +29,24 @@ LINE_CHANNEL_ACCESS_TOKEN = os.environ.get("LINE_CHANNEL_ACCESS_TOKEN", "")  # �
 app = Flask(__name__)
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+
+# ===== 待辦（本機展示用；正式 LINE 版寫入 Google Sheet） =====
+def append_todo(text: str) -> None:
+    with open("todo.txt", "a", encoding="utf-8") as f:
+        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}\t{text}\n")
+
+
+def read_todos(limit: int = 8) -> list:
+    if not os.path.exists("todo.txt"):
+        return []
+    items = []
+    with open("todo.txt", encoding="utf-8") as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t", 1)
+            if len(parts) == 2:
+                items.append({"time": parts[0], "text": parts[1]})
+    return items[-limit:][::-1]
 
 
 # ===== 搜尋功能 =====
@@ -127,7 +145,8 @@ def clean_query(query: str) -> str:
     import re
 
     q = (query or "").strip()
-    q = re.sub(r"^查\s*", "", q)
+    # 先移除開頭的禮貌語與指令，順序要讓「查詢／查一下」先於「查」
+    q = re.sub(r"^(?:請問|幫我查|幫我|查一下|查詢|查)\s*", "", q)
     for w in ["請問", "幫我查", "幫我", "查一下", "查詢", "告訴我"]:
         q = q.replace(w, "")
     q = re.sub(
@@ -281,8 +300,7 @@ def line_callback():
             threading.Thread(target=worker, daemon=True).start()
         else:
             try:
-                with open("todo.txt", "a", encoding="utf-8") as f:
-                    f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}\t{user_text}\n")
+                append_todo(user_text)
             except Exception as e:
                 logger.error(f"寫入待辦失敗: {e}")
             reply_line(reply_token, "已記錄到待辦：" + user_text)
@@ -321,42 +339,108 @@ def ask():
     return jsonify({"answer": answer})
 
 
+# ===== 展示頁（不需要 LINE / Apps Script，方便課堂 demo） =====
+@app.route("/demo")
+def demo():
+    return render_template("demo.html", model=OLLAMA_MODEL)
+
+
+@app.route("/demo/message", methods=["POST"])
+def demo_message():
+    data = request.get_json(silent=True) or {}
+    text = (data.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "請先輸入訊息"}), 400
+
+    t0 = time.time()
+    try:
+        if text.startswith("查"):
+            answer = build_answer(text)
+            return jsonify({
+                "kind": "answer",
+                "answer": answer,
+                "elapsed": round(time.time() - t0, 1),
+            })
+
+        append_todo(text)
+        return jsonify({
+            "kind": "todo",
+            "message": "已記錄到待辦：" + text,
+            "elapsed": round(time.time() - t0, 1),
+        })
+    except Exception as e:
+        logger.exception("展示頁處理失敗")
+        return jsonify({"error": f"處理失敗：{e}"}), 500
+
+
+@app.route("/demo/todos")
+def demo_todos():
+    return jsonify({"todos": read_todos()})
+
+
+@app.route("/health")
+def health():
+    return jsonify({
+        "status": "ok",
+        "model": OLLAMA_MODEL,
+        "line_reply": bool(LINE_CHANNEL_ACCESS_TOKEN),
+    })
+
+
 @app.route("/")
 def home():
+    if os.environ.get("LOCAL_ONLY") == "1":
+        return (
+            "轉接站運行中！Ollama Gemma 2 已就緒。<br>"
+            "課堂展示頁：<a href='/demo'>/demo</a>"
+        )
     return "轉接站運行中！Ollama Gemma 2 已就緒。"
 
 
+def warm_up():
+    """預先載入模型，避免第一次提問等太久。"""
+    try:
+        import ollama
+        logging.info("預先載入 Ollama 模型...")
+        ollama.chat(
+            model=OLLAMA_MODEL,
+            messages=[{"role": "user", "content": "你好"}],
+            options={"num_predict": 1, "num_ctx": 2048},
+            keep_alive="30m",
+        )
+        logging.info("模型已載入完成")
+    except Exception as e:
+        logging.error(f"預先載入模型失敗: {e}")
+
+
 if __name__ == "__main__":
-    from pyngrok import ngrok
     import threading
     import time
-    
+
+    threading.Thread(target=warm_up, daemon=True).start()
+
+    # 課堂展示 / 本機測試：不建立 ngrok，直接開 http://127.0.0.1:5001/demo
+    if os.environ.get("LOCAL_ONLY") == "1" or "--local" in sys.argv:
+        print(f"\n{'='*50}")
+        print("本機展示模式（不建立 ngrok）")
+        print(f"展示頁: http://127.0.0.1:{PORT}/demo")
+        print(f"模型: {OLLAMA_MODEL}")
+        print(f"LINE token: {'已設定' if LINE_CHANNEL_ACCESS_TOKEN else '未設定（展示頁不需要）'}")
+        print(f"{'='*50}\n")
+        app.run(host="127.0.0.1", port=PORT, debug=False)
+        raise SystemExit(0)
+
+    from pyngrok import ngrok
+
     # 先啟動 bot（在背景執行）
     def run_server():
         app.run(host="0.0.0.0", port=PORT, debug=False)
-    
+
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
-    
+
     # 等待 bot 啟動
     time.sleep(2)
-
-    # 預先載入模型，避免第一次提問等太久
-    def warm_up():
-        try:
-            import ollama
-            logging.info("預先載入 Ollama 模型...")
-            ollama.chat(
-                model=OLLAMA_MODEL,
-                messages=[{"role": "user", "content": "你好"}],
-                options={"num_predict": 1, "num_ctx": 2048},
-                keep_alive="30m",
-            )
-            logging.info("模型已載入完成")
-        except Exception as e:
-            logging.error(f"預先載入模型失敗: {e}")
-
-    threading.Thread(target=warm_up, daemon=True).start()
 
     # 再建立 ngrok 隧道
     public_url = ngrok.connect(PORT, "http")
@@ -368,7 +452,7 @@ if __name__ == "__main__":
     print(f"ngrok 公開網址: {public_url}")
     print(f"{'='*50}")
     print("\n等待 LINE 訊息中... （這個視窗請保持開啟）\n")
-    
+
     # 保持主程式運行
     try:
         while True:
