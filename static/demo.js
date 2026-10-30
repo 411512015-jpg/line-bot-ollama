@@ -4,8 +4,10 @@
   const input = document.getElementById("message");
   const chips = document.getElementById("chips");
   const latency = document.getElementById("latency");
-  const todoList = document.getElementById("todos");
-  const todoCount = document.getElementById("todoCount");
+  const expenseList = document.getElementById("expenses");
+  const expenseCount = document.getElementById("expenseCount");
+  const todayTotal = document.getElementById("todayTotal");
+  const monthTotal = document.getElementById("monthTotal");
   const stepEls = [...document.querySelectorAll("#steps li")];
   const sendButton = form.querySelector("button");
 
@@ -140,6 +142,10 @@
       timers.push(setTimeout(() => setStep(2, "active"), 250));
       timers.push(setTimeout(() => { setStep(2, "done"); setStep(3, "active"); }, 1800));
       timers.push(setTimeout(() => { setStep(3, "done"); setStep(4, "active"); }, 4200));
+    } else if (kind === "expense") {
+      timers.push(setTimeout(() => setStep(2, "active"), 300));
+      timers.push(setTimeout(() => { setStep(2, "done"); setStep(3, "active"); }, 700));
+      timers.push(setTimeout(() => { setStep(3, "done"); setStep(4, "active"); }, 1100));
     } else {
       setStep(4, "active");
     }
@@ -155,32 +161,34 @@
     });
   }
 
-  async function refreshTodos() {
+  async function refreshExpenses() {
     try {
-      const res = await fetch("/demo/todos");
+      const res = await fetch("/demo/expenses");
       const data = await res.json();
-      const todos = data.todos || [];
-      todoCount.textContent = String(todos.length);
-      todoList.innerHTML = "";
-      if (!todos.length) {
+      const expenses = data.expenses || [];
+      expenseCount.textContent = String(expenses.length);
+      todayTotal.textContent = `${(data.summary?.today ?? 0):g} 元`;
+      monthTotal.textContent = `${(data.summary?.month ?? 0):g} 元`;
+      expenseList.innerHTML = "";
+      if (!expenses.length) {
         const li = document.createElement("li");
         li.className = "empty";
-        li.textContent = "還沒有待辦，傳一句「買牛奶」試試。";
-        todoList.append(li);
+        li.textContent = "還沒有支出紀錄，傳一句「咖啡 45 元」試試。";
+        expenseList.append(li);
         return;
       }
-      todos.forEach((todo) => {
+      expenses.forEach((exp) => {
         const li = document.createElement("li");
         const text = document.createElement("span");
-        text.textContent = todo.text;
+        text.textContent = `${exp.merchant} ${exp.amount:g} 元（${exp.category}）`;
         const time = document.createElement("span");
         time.className = "t-time";
-        time.textContent = todo.time.slice(5, 16);
+        time.textContent = (exp.time || "").slice(5, 16);
         li.append(text, time);
-        todoList.append(li);
+        expenseList.append(li);
       });
     } catch {
-      /* 展示頁讀不到待辦時不影響聊天 */
+      /* 展示頁讀不到支出清單時不影響聊天 */
     }
   }
 
@@ -193,7 +201,7 @@
     input.value = "";
     addMessage("user", text);
 
-    const kind = text.startsWith("查") ? "answer" : "todo";
+    const kind = text.startsWith("查") ? "answer" : "expense";
     startPipeline(kind);
     const typing = addTyping();
 
@@ -201,7 +209,7 @@
       const res = await fetch("/demo/message", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text, kind }),
+        body: JSON.stringify({ text }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "伺服器沒有回應");
@@ -209,9 +217,11 @@
       typing.remove();
       if (data.kind === "answer") {
         addMessage("bot", answerContent(data.answer || ""));
+      } else if (data.kind === "expense") {
+        addMessage("bot", data.reply || "已記帳。");
+        refreshExpenses();
       } else {
         addMessage("bot", data.message || "已記錄。");
-        refreshTodos();
       }
       latency.textContent = `${data.elapsed ?? "?"} 秒`;
       finishPipeline();
@@ -239,5 +249,5 @@
     sendMessage(button.dataset.text);
   });
 
-  refreshTodos();
+  refreshExpenses();
 })();

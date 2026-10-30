@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="utf-8">
-<title>LINE 待辦 × 本地 AI 查詢助手｜期中展示</title>
+<title>LINE × 本地 AI 記帳小幫手｜期中展示</title>
 <style>
   :root {
     --ink:#122019; --cream:#f4f0e6; --paper:#fffdf8; --green:#06c755;
@@ -139,10 +139,10 @@
   <div class="pad cover-grid">
     <div class="cover-left">
       <span class="pill">MIDTERM PROJECT · 2026</span>
-      <h1>把 LINE 變成<br><span class="green">會查資料的</span><br>待辦小幫手</h1>
-      <p class="lede">同一個聊天視窗，兩種工作流：<br>「查 …」得到有來源的答案；其他訊息自動變成待辦。</p>
-      <div class="badges"><span class="badge">本機推論</span><span class="badge">免 API 費用</span><span class="badge">附上來源</span></div>
-      <div class="demo-note">90 秒 Demo：查 玉山有多高 → 買牛奶</div>
+      <h1>把 LINE 變成<br><span class="green">會記帳</span>的<br>AI 記帳小幫手</h1>
+      <p class="lede">同一個聊天視窗，兩種工作流：<br>「咖啡 45 元」自動記帳、分類、累計；「查 …」得到有來源的答案。</p>
+      <div class="badges"><span class="badge">記帳自動分類</span><span class="badge">免 API 費用</span><span class="badge">今日＋本月累計</span></div>
+      <div class="demo-note">90 秒 Demo：咖啡 45 元 → Uber 60</div>
     </div>
     <div class="phone-frame"><img src="screenshots/phone-demo.png" alt="展示頁手機畫面"></div>
   </div>
@@ -154,13 +154,13 @@
   <div class="grid"></div>
   <div class="pad">
     <div class="eyebrow">01 / PROBLEM</div>
-    <h2>問題不是「沒有 AI」，<br>是每天多做了幾次切換。</h2>
+    <h2>記帳，本來就該很簡單。</h2>
     <div class="three">
-      <div class="card"><div class="num">01</div><h3>查資料要跳 App</h3><p>在 LINE 看到問題，切到瀏覽器搜尋，看完再切回來。注意力被切成三段。</p></div>
-      <div class="card"><div class="num">02</div><h3>待辦散在聊天裡</h3><p>「買牛奶」被後面的訊息洗掉；記事軟體又常常懶得開。</p></div>
+      <div class="card"><div class="num">01</div><h3>記帳要開 App</h3><p>手動打類別、換工具、整理匯總。不想為每筆花費開一個 App。</p></div>
+      <div class="card"><div class="num">02</div><h3>查資料要切 App</h3><p>在 LINE 裡問，切到瀏覽器搜尋，看完再切回來。注意力被切成三段。</p></div>
       <div class="card"><div class="num">03</div><h3>雲端 AI 有成本</h3><p>逐字計費、需要 API key；敏感內容也不一定想送出門。</p></div>
     </div>
-    <div class="target">主要使用者：常用 LINE 的學生與小型團隊　·　設計目標：不離開聊天室、答案可查證、沒有逐字費用</div>
+    <div class="target">主要使用者：常用 LINE 的學生與小型團隊　·　設計目標：不離開聊天室、記帳免 API、累計即時</div>
   </div>
   <div class="footer"><span>LINE Bot × Local LLM</span><span class="page">02</span></div>
 </section>
@@ -171,18 +171,18 @@
   <div class="pad solution">
     <div>
       <div class="eyebrow">02 / SOLUTION</div>
-      <h2>一個入口，兩種工作流。</h2>
+      <h2>一個入口，兩種模式。</h2>
       <div class="mode green">
         <div class="mode-label">查 …</div>
         <h3>先搜尋，再讓本機模型整理；答案最後附來源。</h3>
         <p>新聞題走 Google News RSS；知識題走中文 Wikipedia。</p>
-        <div class="example"><b>查 玉山有多高</b> → 3,950 公尺＋Wikipedia 來源<br><b>查 今天台灣有什麼新聞</b> → 新聞摘要＋媒體來源</div>
+        <div class="example"><b>查 玉山有多高</b> → 3,950 公尺＋Wikipedia 來源</div>
       </div>
       <div class="mode orange">
-        <div class="mode-label">記事情</div>
-        <h3>不是「查」開頭的訊息，直接寫進待辦。</h3>
-        <p>正式 LINE 版寫入 Google Sheet；展示頁寫入本機 todo.txt。</p>
-        <div class="example"><b>買牛奶</b> → 已記錄到待辦：買牛奶</div>
+        <div class="mode-label">咖啡 45 元</div>
+        <h3>本地解析 merchant＋amount，分類後累計今日／本月。</h3>
+        <p>記帳走本地解析＋加總，完全免 API；分類用關鍵字 heuristic。</p>
+        <div class="example"><b>咖啡 45 元</b> → 已記帳（飲食），今日累計…<br><b>Uber 60</b> → 已記帳（交通），累計更新</div>
       </div>
       <div class="demo-note">同一套 /ask 流程；展示頁不需要 LINE token。</div>
     </div>
@@ -217,10 +217,10 @@
   <div class="grid"></div>
   <div class="pad">
     <div class="eyebrow">04 / EVIDENCE</div>
-    <h2>測試：11/11，沒有僥倖。</h2>
+    <h2>測試：17/17，沒有僥倖。</h2>
     <div class="metrics">
-      <div class="metric"><b>11/11</b><span>單元測試通過</span><small>不需 LINE token 或 Ollama</small></div>
-      <div class="metric"><b>5.9 秒</b><span>暖機後查詢</span><small>展示頁實測，含搜尋與生成</small></div>
+      <div class="metric"><b>17/17</b><span>單元測試通過</span><small>不需 LINE token 或 Ollama</small></div>
+      <div class="metric"><b>0.3 秒</b><span>暖機後記帳</span><small>本地累計即時更新</small></div>
       <div class="metric"><b>16.2 秒</b><span>冷啟動</span><small>模型載入是主要成本</small></div>
       <div class="metric"><b>0</b><span>敏感資料</span><small>git 追蹤檔案掃描結果</small></div>
     </div>
@@ -228,7 +228,7 @@
     <div class="limits">
       <div class="limit">電腦要開著；休眠或 Ollama 沒開就查不到</div>
       <div class="limit">ngrok 免費網址會變，換了要更新設定</div>
-      <div class="limit">只讀 RSS／摘要，沒有抓文章正文</div>
+      <div class="limit">記帳分類是 heuristic，尚未 AI 分類</div>
       <div class="limit">Webhook 尚未驗證 LINE 簽章</div>
     </div>
     <div class="evidence-note">LINE 端到端需要 token；交件前以同一個 /ask 流程的展示頁做回歸測試。</div>
@@ -246,7 +246,7 @@
       <div class="roadmap">
         <div class="road"><div class="num">01</div><h3>固定網域</h3><p>Cloudflare Tunnel 取代會變的 ngrok</p></div>
         <div class="road"><div class="num">02</div><h3>Webhook 簽章</h3><p>驗證 X-Line-Signature ＋ allowlist</p></div>
-        <div class="road"><div class="num">03</div><h3>待辦進化</h3><p>列表／完成／刪除，或串 Google Tasks</p></div>
+        <div class="road"><div class="num">03</div><h3>記帳進化</h3><p>AI 分類／預算警示，或使用者自訂類別</p></div>
         <div class="road"><div class="num">04</div><h3>檢索進化</h3><p>抓正文做 RAG ＋雲端模型 fallback</p></div>
       </div>
     </div>

@@ -109,7 +109,7 @@ def build_architecture():
     number_badge(draw, (1317, 322), "4")
 
     text(draw, (112, 382), "LINE", 40, INK, True)
-    text(draw, (112, 435), "使用者輸入\n「查 …」或待辦", 22, "#345045")
+    text(draw, (112, 435), "使用者輸入\n「咖啡 45 元」或「查 …」", 22, "#345045")
 
     text(draw, (477, 382), "Apps Script", 36, "#ffffff", True)
     text(draw, (477, 435), "Webhook 收訊息\n分流／非同步轉接", 22, "#b8d3c3")

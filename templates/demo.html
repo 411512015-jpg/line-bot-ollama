@@ -13,24 +13,24 @@
   <main class="shell">
     <section class="intro">
       <div class="eyebrow"><span class="dot"></span> MIDTERM PROJECT · 2026</div>
-      <h1>把 LINE 變成<br><em>會查資料</em>的<br>待辦小幫手</h1>
+      <h1>把 LINE 變成<br><em>會記帳</em>的<br>AI 記帳小幫手</h1>
       <p class="lede">
-        同一個聊天視窗，兩種工作流：<strong>「查 …」</strong>交給本機 Ollama
-        搜尋＋回答並附來源；其他訊息自動記成待辦。
+        同一個聊天視窗，兩種工作流：<strong>「咖啡 45 元」</strong>自動記帳分類、
+        回覆今日累計與本月累計；<strong>「查 …」</strong>交給本機 Ollama 搜尋＋回答並附來源。
       </p>
 
       <div class="badges">
-        <span>本機推論</span>
+        <span>記帳自動分類</span>
         <span>免 API 費用</span>
-        <span>附上來源</span>
+        <span>今日＋本月累計</span>
       </div>
 
       <div class="flow">
-        <div class="flow-title">一句話的旅程</div>
+        <div class="flow-title">一筆支出，三步驟</div>
         <div class="flow-line">
-          <span>LINE</span><i></i><span>Apps Script</span><i></i><span>Flask 轉接站</span><i></i><span>Gemma 2</span>
+          <span>LINE</span><i></i><span>Apps Script</span><i></i><span>Flask 轉接站</span><i></i><span>記帳引擎</span>
         </div>
-        <small>搜尋資料：Google News RSS + 中文 Wikipedia（免金鑰）</small>
+        <small>類似「咖啡 45 元」→ 本地解析 merchant + amount → 分類 → 累計 → 回覆</small>
       </div>
 
       <div class="note">
@@ -52,7 +52,7 @@
         <header class="chat-head">
           <div class="avatar">AI</div>
           <div class="who">
-            <b>AI 待辦小幫手</b>
+            <b>AI 記帳小幫手</b>
             <small><span class="online"></span> 本機模型在線</small>
           </div>
           <div class="menu">⋮</div>
@@ -62,21 +62,21 @@
           <div class="day">今天</div>
           <div class="msg bot">
             <div class="bubble">
-              嗨！有問題就傳 <b>「查 …」</b>，我會上網找資料再回答。<br>
-              要記事情就直接打，例如「買牛奶」。
+              嗨！記一筆就打 <b>「咖啡 45 元」</b>這種格式，我會自動分類，並回覆今日累計與本月累計。<br>
+              想查資料就打 <b>「查 …」</b>。
             </div>
             <time>09:41</time>
           </div>
         </div>
 
         <div class="chips" id="chips">
-          <button type="button" data-text="查 玉山有多高">查 玉山有多高</button>
-          <button type="button" data-text="查 今天台灣有什麼新聞">今天有什麼新聞</button>
-          <button type="button" data-text="買牛奶">買牛奶</button>
+          <button type="button" data-text="咖啡 45 元">咖啡 45 元</button>
+          <button type="button" data-text="全聯 300 早餐">全聯 300 早餐</button>
+          <button type="button" data-text="Uber 60">Uber 60</button>
         </div>
 
         <form class="composer" id="chatForm">
-          <input id="message" autocomplete="off" placeholder="輸入「查 …」或待辦事項" maxlength="300">
+          <input id="message" autocomplete="off" placeholder="輸入支出，例如「咖啡 45 元」" maxlength="300">
           <button type="submit" aria-label="送出">↑</button>
         </form>
       </div>
@@ -89,24 +89,26 @@
           </div>
           <h2>這次發生了什麼</h2>
           <ol class="steps" id="steps">
-            <li data-step="1"><span class="step-icon">1</span><div><b>接收訊息</b><small>判斷「查」或待辦</small></div><i class="state">待機</i></li>
-            <li data-step="2"><span class="step-icon">2</span><div><b>搜尋資料</b><small>新聞 RSS／Wikipedia</small></div><i class="state">待機</i></li>
-            <li data-step="3"><span class="step-icon">3</span><div><b>本地模型生成</b><small>只根據搜尋結果回答</small></div><i class="state">待機</i></li>
-            <li data-step="4"><span class="step-icon">4</span><div><b>回覆並附來源</b><small>超過長度自動截斷</small></div><i class="state">待機</i></li>
+            <li data-step="1"><span class="step-icon">1</span><div><b>接收訊息</b><small>判斷「查」或「記帳」</small></div><i class="state">待機</i></li>
+            <li data-step="2"><span class="step-icon">2</span><div><b>解析支出</b><small>抽出 merchant + amount</small></div><i class="state">待機</i></li>
+            <li data-step="3"><span class="step-icon">3</span><div><b>累計計算</b><small>今日累計／本月累計</small></div><i class="state">待機</i></li>
+            <li data-step="4"><span class="step-icon">4</span><div><b>回覆累計</b><small>回給使用者</small></div><i class="state">待機</i></li>
           </ol>
           <div class="latency"><span>本回合耗時</span><b id="latency">—</b></div>
         </section>
 
-        <section class="panel todo-panel">
+        <section class="panel expense-panel">
           <div class="panel-head">
-            <span class="panel-kicker">CAPTURED TASKS</span>
-            <span class="count" id="todoCount">0</span>
+            <span class="panel-kicker">CAPTURED EXPENSES</span>
+            <span class="count" id="expenseCount">0</span>
           </div>
-          <h2>待辦清單</h2>
-          <ul class="todos" id="todos">
-            <li class="empty">還沒有待辦，傳一句「買牛奶」試試。</li>
+          <h2>支出清單</h2>
+          <div class="sum-row"><span>今日累計</span><b id="todayTotal">—</b></div>
+          <div class="sum-row"><span>本月累計</span><b id="monthTotal">—</b></div>
+          <ul class="expenses" id="expenses">
+            <li class="empty">還沒有支出紀錄，傳一句「咖啡 45 元」試試。</li>
           </ul>
-          <small class="footnote">展示頁寫入本機 <code>todo.txt</code>；LINE 版寫入 Google Sheet。</small>
+          <small class="footnote">展示頁寫入本機 <code>expenses.txt</code>；LINE 版寫入 Google Sheet。</small>
         </section>
       </aside>
     </section>

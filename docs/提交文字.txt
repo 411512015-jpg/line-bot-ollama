@@ -1,12 +1,16 @@
 https://github.com/411512015-jpg/line-bot-ollama
 
-題目：LINE 待辦 × 本地 AI 查詢助手
+題目：LINE × 本地 AI 記帳小幫手
 
-做什麼：在同一個 LINE 視窗裡，「查 …」會先搜尋 Google News RSS／中文 Wikipedia，再交給本機 Ollama Gemma 2 2B 整理，回覆附來源；其他訊息自動寫進 Google Sheet 待辦。
-給誰用：常用 LINE 的學生與小型團隊，以及想試本地 LLM、但不想先付 API 費用的人。
-怎麼做：Google Apps Script 當 Webhook，Flask 轉接站跑在自己的電腦，ngrok 提供公開網址；搜尋與模型推論都在本機。
-怎麼測：11 個單元測試；展示頁實際查「玉山有多高」約 5.9 秒，並實際記錄一筆待辦；交件前用 scripts/check_submission.py 掃描金鑰與部署網址。
-下一步：固定網域（Cloudflare Tunnel）、Webhook 簽章驗證、待辦列表／完成／刪除、抓文章正文做 RAG、雲端模型 fallback。
+做什麼：在同一個 LINE 聊天視窗裡，「咖啡 45 元」這類格式會先被本地解析（merchant + amount + category），再回覆今日累計與本月累計；「查 …」則交給本機 Ollama 搜尋＋回答並附來源。
+
+給誰用：手機不離身、常用 LINE 的學生與小型團隊；想玩本地 LLM、但不想付 API 費用的記帳者。
+
+怎麼做：Google Apps Script 當 Webhook，Flask 轉接站跑在自己的電腦，ngrok 提供公開網址；記帳走本地解析，搜尋與模型推論都在本機。
+
+怎麼測：11 個單元測試；展示頁實際輸入「咖啡 45 元」即時回累計；交件前用 scripts/check_submission.py 掃描金鑰與部署網址。
+
+下一步：AI 做細分類、Flex Message、Webhook 簽章驗證、固定網域（Cloudflare Tunnel）。
 
 上傳檔案：
 1. 專題報告.pdf
@@ -15,4 +19,4 @@ https://github.com/411512015-jpg/line-bot-ollama
 4. 期中展示.pptx
 5. 專題報告.docx（可選）
 
-備註：repo 與檔案中沒有金鑰、通行碼或 Apps Script 正式部署網址；報告姓名／學號欄位請補上。
+備註：repo 與檔案中沒有金鑰、通行碼或 Apps Script 正式部署網址；報告姓名／學號已填入 陳芊妤 411512015。

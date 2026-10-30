@@ -36,6 +36,38 @@ class SearchRoutingTests(unittest.TestCase):
         self.assertEqual(wiki.call_args.kwargs["limit"], 3)
 
 
+class ExpenseTests(unittest.TestCase):
+    def test_parse_expense_simple(self):
+        exp = relay_server.parse_expense("咖啡 45 元")
+        self.assertEqual(exp["merchant"], "咖啡")
+        self.assertEqual(exp["amount"], 45.0)
+        self.assertEqual(exp["category"], "飲食")
+
+    def test_parse_expense_with_verb_and_merchant(self):
+        exp = relay_server.parse_expense("買全聯 300 早餐")
+        self.assertEqual(exp["merchant"], "全聯")
+        self.assertEqual(exp["amount"], 300.0)
+        self.assertEqual(exp["category"], "飲食")
+
+    def test_parse_expense_without_amount_is_todo(self):
+        self.assertIsNone(relay_server.parse_expense("買牛奶"))
+
+    def test_expense_summary_today_month_and_category(self):
+        from datetime import date
+
+        today = date.today().strftime("%Y-%m-%d")
+        fake = [
+            {"time": today + " 10:00:00", "merchant": "咖啡", "amount": 45.0, "category": "飲食"},
+            {"time": today + " 12:00:00", "merchant": "Uber", "amount": 60.0, "category": "交通"},
+            {"time": "2000-01-01 09:00:00", "merchant": "舊筆", "amount": 10.0, "category": "其他"},
+        ]
+        with patch("relay_server.read_expenses", return_value=fake):
+            s = relay_server.expense_summary()
+        self.assertEqual(s["today"], 105.0)
+        self.assertEqual(s["month"], 105.0)
+        self.assertEqual(s["by_category"], {"飲食": 45.0, "交通": 60.0})
+
+
 class AnswerTests(unittest.TestCase):
     @patch("relay_server.ask_ollama", return_value="玉山主峰高 3,952 公尺。")
     @patch(
@@ -88,6 +120,26 @@ class HttpTests(unittest.TestCase):
         self.assertEqual(res.status_code, 200)
         self.assertEqual(res.get_json()["kind"], "todo")
         append.assert_called_once_with("買牛奶")
+
+    @patch("relay_server.expense_summary", return_value={"today": 45.0, "month": 45.0, "by_category": {"飲食": 45.0}})
+    @patch("relay_server.append_expense")
+    def test_demo_expense_mode(self, append, summary):
+        res = self.client.post("/demo/message", json={"text": "咖啡 45 元"})
+        self.assertEqual(res.status_code, 200)
+        body = res.get_json()
+        self.assertEqual(body["kind"], "expense")
+        self.assertEqual(body["merchant"], "咖啡")
+        self.assertEqual(body["category"], "飲食")
+        self.assertIn("累計", body["reply"])
+        append.assert_called_once()
+
+    def test_demo_expenses_endpoint_lists_expenses(self):
+        with patch("relay_server.read_expenses", return_value=[]):
+            res = self.client.get("/demo/expenses")
+        self.assertEqual(res.status_code, 200)
+        body = res.get_json()
+        self.assertEqual(body["expenses"], [])
+        self.assertIn("summary", body)
 
     def test_empty_message_is_rejected(self):
         res = self.client.post("/demo/message", json={"text": "   "})

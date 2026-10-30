@@ -1,7 +1,8 @@
 """
 轉接站程式 - 接收 Apps Script 的請求，轉給本地 Ollama 回答
 - 接收 POST /ask 請求
-- 用 Ollama Gemma 2 回答問題
+- 「查 …」用 Ollama Gemma 2 回答問題，並附來源
+- 「咖啡 45 元」這類格式自動記帳，回覆今日／本月累計
 - 傳回答案給 Apps Script
 """
 
@@ -47,6 +48,92 @@ def read_todos(limit: int = 8) -> list:
             if len(parts) == 2:
                 items.append({"time": parts[0], "text": parts[1]})
     return items[-limit:][::-1]
+
+
+# ===== 記帳（本機展示用；正式 LINE 版寫入 Google Sheet） =====
+EXPENSE_FILE = "expenses.txt"
+
+_CATEGORY_HINTS = [
+    ("飲食", ["咖啡", "奶茶", "餐", "飯", "早餐", "午餐", "晚餐", "吃", "食品", "全聯", "好又多", "家樂福", "小吃", "早點", "便當", "火鍋", "拉麵", "餅乾", "零食"]),
+    ("交通", ["高鐵", "台鐵", "火車", "公車", "捷運", "地鐵", "Uber", "計程車", "油", "加油", "停車"]),
+    ("娛樂", ["電影", "KTV", "遊戲", "演唱會", "音樂", "樂園", "迪士尼", "健身", "健體"]),
+    ("醫療", ["掛號", "診所", "藥", "牙", "醫院", "就醫", "體檢"]),
+]
+
+
+def parse_expense(text: str):
+    """解析「咖啡 45 元」→ {merchant, amount, category}；不是支出格式時回 None"""
+    import re
+
+    q = (text or "").strip()
+    m = re.match(r"^(?:買|花|支出|購買)?\s*(.+?)\s+(\d+(?:\.\d+)?)\s*(?:元|台幣|圓|塊|RMB)?\s*(.*)$", q)
+    if not m:
+        return None
+    merchant = m.group(1).strip()
+    amount = round(float(m.group(2)), 2)
+    if not merchant or amount <= 0:
+        return None
+    category = "其他"
+    for name, hints in _CATEGORY_HINTS:
+        if any(h in merchant for h in hints):
+            category = name
+            break
+    return {"merchant": merchant, "amount": amount, "category": category}
+
+
+def append_expense(exp: dict) -> None:
+    with open(EXPENSE_FILE, "a", encoding="utf-8") as f:
+        f.write(f"{time.strftime('%Y-%m-%d %H:%M:%S')}\t{exp['merchant']}\t{exp['amount']}\t{exp['category']}\n")
+
+
+def read_expenses(limit: int = 50) -> list:
+    if not os.path.exists(EXPENSE_FILE):
+        return []
+    items = []
+    with open(EXPENSE_FILE, encoding="utf-8") as f:
+        for line in f:
+            parts = line.rstrip("\n").split("\t")
+            if len(parts) != 4:
+                continue
+            items.append({
+                "time": parts[0],
+                "merchant": parts[1],
+                "amount": float(parts[2]),
+                "category": parts[3],
+            })
+    return items[-limit:][::-1]
+
+
+def expense_summary(days: int = 30) -> dict:
+    """回傳今日累計與本月累計（新台幣）"""
+    from datetime import date
+
+    today = date.today().strftime("%Y-%m-%d")
+    month = today[:7]
+    today_total = 0.0
+    month_total = 0.0
+    by_category: dict = {}
+    for e in read_expenses():
+        d = (e.get("time") or "")[:10]
+        amt = float(e.get("amount") or 0)
+        if d[:7] == month:
+            month_total += amt
+            cat = e.get("category") or "其他"
+            by_category[cat] = by_category.get(cat, 0.0) + amt
+        if d == today:
+            today_total += amt
+    return {
+        "today": round(today_total, 2),
+        "month": round(month_total, 2),
+        "by_category": {k: round(v, 2) for k, v in by_category.items() if v > 0},
+    }
+
+
+def format_expense_reply(exp: dict, summary: dict) -> str:
+    return (
+        f"已記帳 {exp['merchant']} {exp['amount']:g} 元（{exp['category']}）\n"
+        f"今日累計：{summary['today']:g} 元　｜　本月累計：{summary['month']:g} 元"
+    )
 
 
 # ===== 搜尋功能 =====
@@ -299,11 +386,20 @@ def line_callback():
 
             threading.Thread(target=worker, daemon=True).start()
         else:
-            try:
-                append_todo(user_text)
-            except Exception as e:
-                logger.error(f"寫入待辦失敗: {e}")
-            reply_line(reply_token, "已記錄到待辦：" + user_text)
+            exp = parse_expense(user_text)
+            if exp:
+                try:
+                    append_expense(exp)
+                    summary = expense_summary()
+                    reply_line(reply_token, format_expense_reply(exp, summary))
+                except Exception as e:
+                    logger.error(f"記帳失敗: {e}")
+            else:
+                try:
+                    append_todo(user_text)
+                except Exception as e:
+                    logger.error(f"寫入待辦失敗: {e}")
+                reply_line(reply_token, "已記錄到待辦：" + user_text)
 
     return "OK", 200
 
@@ -323,6 +419,12 @@ def ask():
     if reply_token:
         def worker():
             try:
+                exp = parse_expense(question)
+                if exp:
+                    append_expense(exp)
+                    summary = expense_summary()
+                    reply_line(reply_token, format_expense_reply(exp, summary))
+                    return
                 answer = build_answer(question)
                 logger.info(f"回答：{answer[:120]}...")
                 reply_line(reply_token, answer)
@@ -333,6 +435,16 @@ def ask():
         import threading
         threading.Thread(target=worker, daemon=True).start()
         return jsonify({"status": "accepted"}), 202
+
+    exp = parse_expense(question)
+    if exp:
+        append_expense(exp)
+        summary = expense_summary()
+        return jsonify({
+            "kind": "expense",
+            "reply": format_expense_reply(exp, summary),
+            "summary": summary,
+        })
 
     answer = build_answer(question)
     logger.info(f"回答：{answer[:120]}...")
@@ -354,6 +466,20 @@ def demo_message():
 
     t0 = time.time()
     try:
+        exp = parse_expense(text)
+        if exp:
+            append_expense(exp)
+            summary = expense_summary()
+            return jsonify({
+                "kind": "expense",
+                "merchant": exp["merchant"],
+                "amount": exp["amount"],
+                "category": exp["category"],
+                "reply": format_expense_reply(exp, summary),
+                "summary": summary,
+                "elapsed": round(time.time() - t0, 1),
+            })
+
         if text.startswith("查"):
             answer = build_answer(text)
             return jsonify({
@@ -376,6 +502,14 @@ def demo_message():
 @app.route("/demo/todos")
 def demo_todos():
     return jsonify({"todos": read_todos()})
+
+
+@app.route("/demo/expenses")
+def demo_expenses():
+    return jsonify({
+        "expenses": read_expenses(),
+        "summary": expense_summary(),
+    })
 
 
 @app.route("/health")

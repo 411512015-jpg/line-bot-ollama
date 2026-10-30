@@ -2,6 +2,7 @@
  * LINE Bot - Google Apps Script Webhook
  *
  * 收到「查 ...」→ 轉給本機轉接站（Ollama）回答
+ * 收到「咖啡 45 元」→ 本機記帳，回今日／本月累計
  * 其他訊息 → 記錄到 Google Sheet 待辦
  *
  * 設定方式（不要把 token 貼進程式碼）：
@@ -59,9 +60,13 @@ function doPost(e) {
       let replyText = "";
       let handledByRelay = false;
 
-      // 判斷是否為「查 ...」
-      if (userText.startsWith("查")) {
-        // 轉給本地轉接站（Ollama）；轉接站算完會直接回 LINE
+      // 判斷是否要交給本地轉接站：
+      // - 「查 …」→ 搜尋 + Ollama 回答
+      // - 「咖啡 45 元」→ 本地記帳，回今日／本月累計
+      const isExpenseText = /^(買|花|支出|購買)?\s*.+?\s+\d/.test(userText);
+
+      if (userText.startsWith("查") || isExpenseText) {
+        // 轉給本地轉接站（Ollama / 記帳）；轉接站算完會直接回 LINE
         askRelay(userText, event.replyToken);
         handledByRelay = true;
       } else {
