@@ -66,6 +66,8 @@ class ExpenseTests(unittest.TestCase):
         self.assertEqual(s["today"], 105.0)
         self.assertEqual(s["month"], 105.0)
         self.assertEqual(s["by_category"], {"飲食": 45.0, "交通": 60.0})
+        self.assertEqual(s["last_month"], 0.0)
+        self.assertEqual(s["last_month_by_category"], {})
 
 
 class AnswerTests(unittest.TestCase):

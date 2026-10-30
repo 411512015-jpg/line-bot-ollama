@@ -156,7 +156,7 @@ text(s, "查 玉山有多高   →   3,950 公尺＋Wikipedia 來源",
 rect(s, 0.72, 4.35, 7.35, 1.85, PAPER, ORANGE, radius=0.06)
 text(s, "咖啡 45 元", 1.0, 4.55, 1.5, 0.45, 20, RGBColor(0xC4, 0x5C, 0x21), True)
 text(s, "本地解析 merchant＋amount，分類後累計今日／本月。", 1.0, 5.08, 6.6, 0.45, 15, INK, True)
-text(s, "咖啡 45 元 → 已記帳（飲食），今日累計…", 1.0, 5.55, 6.6, 0.35, 11, MUTED)
+text(s, "咖啡 45 元 → 已記帳（飲食），今日累計…　／　上個月累計…", 1.0, 5.55, 6.6, 0.35, 11, MUTED)
 
 text(s, "同一套 /ask 流程；展示頁不需要 LINE token。", 0.75, 6.55, 7.2, 0.35, 10,
      GREEN_DARK, True)

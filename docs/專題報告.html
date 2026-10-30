@@ -67,7 +67,7 @@ hr { border: 0; border-top: .6pt solid #dbe7de; margin: 5mm 0; }
 <h2>摘要</h2>
 <p>這個專案把 LINE 變成一個「可以記帳、也可以查資料」的聊天助手。使用者在同一個聊天視窗輸入「咖啡 45 元」這類格式時，系統會先在本地解析 merchant（咖啡）與金額（45 元），依關鍵字分類（飲食），再把累計回覆給使用者；當使用者想查資料時，則把問題交給跑在本機上的 Ollama Gemma 2 2B 模型，加上 Google News RSS 與中文 Wikipedia 的搜尋來源，最後回覆一段繁體中文答案與可點擊的來源。</p>
 <p>專案解決兩個日常問題：一是「不想為每筆支出打開記帳 App、手動分類」；二是「想查資料卻不想把問題送去雲端模型」。系統採「雲端收發、本機推論」的混合架構，並保留了一個<strong>不需要 token 也能 demo</strong> 的展示頁。</p>
-<p>實際測試中，記帳回覆約 0.3 秒；查資料暖機後一次約 5.5～5.9 秒；冷啟動約 16 秒；11 個單元測試全部通過。</p>
+<p>實際測試中，記帳回覆約 0.3 秒；查資料暖機後一次約 5.5～5.9 秒；冷啟動約 16 秒；11 個單元測試全部通過。累計資料支援跨月比較（本月 vs 上個月）。</p>
 <hr />
 <h2>1. 問題與目標</h2>
 <h3>1.1 我想解決什麼？</h3>
@@ -222,8 +222,8 @@ if (userText.startsWith(&quot;查&quot;) || isExpenseText) {
 <li><code>parse_expense(text)</code>：解析「咖啡 45 元」→ <code>{merchant, amount, category}</code>；不是支出格式時回 <code>None</code>。</li>
 <li><code>append_expense(exp)</code>：把支出寫入本機 <code>expenses.txt</code>。</li>
 <li><code>read_expenses()</code>：讀取最近支出。</li>
-<li><code>expense_summary()</code>：回今日累計、本月累計與分類小計。</li>
-<li><code>format_expense_reply(...)</code>：組回覆文案：「已記帳 咖啡 45 元（飲食）｜今日累計…｜本月累計…」。</li>
+<li><code>expense_summary()</code>：回今日累計、本月累計、<strong>上個月累計</strong>與分類小計（含 last_month_by_category），可用來做跨月比較。</li>
+<li><code>format_expense_reply(...)</code>：組回覆文案：「已記帳 …｜今日累計…｜本月累計…（上個月累計…）」。</li>
 </ul>
 <p>分類使用關鍵字 heuristic：咖啡、餐廳、全聯、飯店等 → 飲食；高鐵、Uber、油費等 → 交通；電影、KTV、遊戲等 → 娛樂；掛號、藥局等 → 醫療；其餘 → 其他。</p>
 <h3>4.3 搜尋與關鍵字清理</h3>

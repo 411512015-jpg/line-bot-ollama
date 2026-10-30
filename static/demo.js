@@ -8,6 +8,7 @@
   const expenseCount = document.getElementById("expenseCount");
   const todayTotal = document.getElementById("todayTotal");
   const monthTotal = document.getElementById("monthTotal");
+  const lastMonthTotal = document.getElementById("lastMonthTotal");
   const stepEls = [...document.querySelectorAll("#steps li")];
   const sendButton = form.querySelector("button");
 
@@ -169,6 +170,7 @@
       expenseCount.textContent = String(expenses.length);
       todayTotal.textContent = `${(data.summary?.today ?? 0):g} 元`;
       monthTotal.textContent = `${(data.summary?.month ?? 0):g} 元`;
+      lastMonthTotal.textContent = `${(data.summary?.last_month ?? 0):g} 元`;
       expenseList.innerHTML = "";
       if (!expenses.length) {
         const li = document.createElement("li");

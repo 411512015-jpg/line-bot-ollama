@@ -105,14 +105,23 @@ def read_expenses(limit: int = 50) -> list:
 
 
 def expense_summary(days: int = 30) -> dict:
-    """回傳今日累計與本月累計（新台幣）"""
-    from datetime import date
+    """回傳今日累計、本月累計與上個月累計（新台幣）"""
+    from datetime import date, timedelta
 
-    today = date.today().strftime("%Y-%m-%d")
-    month = today[:7]
+    today = date.today()
+    today_str = today.strftime("%Y-%m-%d")
+    month = today.strftime("%Y-%m")
+    if today.month == 12:
+        prev_month = (date(today.year + 1, 1, 1) - timedelta(days=1)).strftime("%Y-%m")
+    else:
+        prev_month = (date(today.year, today.month, 1) - timedelta(days=1)).strftime("%Y-%m")
+
     today_total = 0.0
     month_total = 0.0
+    last_month_total = 0.0
     by_category: dict = {}
+    last_month_by_category: dict = {}
+
     for e in read_expenses():
         d = (e.get("time") or "")[:10]
         amt = float(e.get("amount") or 0)
@@ -120,20 +129,30 @@ def expense_summary(days: int = 30) -> dict:
             month_total += amt
             cat = e.get("category") or "其他"
             by_category[cat] = by_category.get(cat, 0.0) + amt
-        if d == today:
+        if d[:7] == prev_month:
+            last_month_total += amt
+            cat = e.get("category") or "其他"
+            last_month_by_category[cat] = last_month_by_category.get(cat, 0.0) + amt
+        if d == today_str:
             today_total += amt
+
     return {
         "today": round(today_total, 2),
         "month": round(month_total, 2),
+        "last_month": round(last_month_total, 2),
         "by_category": {k: round(v, 2) for k, v in by_category.items() if v > 0},
+        "last_month_by_category": {k: round(v, 2) for k, v in last_month_by_category.items() if v > 0},
     }
 
 
 def format_expense_reply(exp: dict, summary: dict) -> str:
-    return (
-        f"已記帳 {exp['merchant']} {exp['amount']:g} 元（{exp['category']}）\n"
-        f"今日累計：{summary['today']:g} 元　｜　本月累計：{summary['month']:g} 元"
-    )
+    lines = [
+        f"已記帳 {exp['merchant']} {exp['amount']:g} 元（{exp['category']}）",
+        f"今日累計：{summary['today']:g} 元　｜　本月累計：{summary['month']:g} 元",
+    ]
+    if summary.get("last_month"):
+        lines.append(f"上個月累計：{summary['last_month']:g} 元")
+    return "\n".join(lines)
 
 
 # ===== 搜尋功能 =====
